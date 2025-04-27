@@ -8,6 +8,7 @@ import os
 import time
 import signal
 from datetime import datetime
+import pandas as pd  # Добавляем импорт pandas для работы с Excel
 
 # Исправляем кодировку для Windows
 if sys.platform == 'win32':
@@ -87,11 +88,10 @@ SOURCE_CHANNELS = {
     2366686880:"@Ranma_Calls_Solana",
     1510769567:"@BatmanGamble",
     1818702441:"@michiosuzukiofsatoshicalls",
-    1784631341:"@CobraGems",
     1763265784:"@MarkDegens",
-    1880851888:"@metacaller",
+    1712900374:"@JeetyCall",
     1983450418:"@shitcoinneverland",
-    1921904641:"@Haruming",
+    2284638367:"@GemDynasty",
     1554385364:"@SultanPlays",
     1913209050:"@gigacalls",
     1869537526:"@POSEIDON_DEGEN_CALLS",
@@ -108,11 +108,29 @@ SOURCE_CHANNELS = {
     2051055592:"@Mrbigbagcalls",
     1975392115:"@FrenzGems",
     1671616196:"@veigargambles",
-    2219396784:"@Minion_Degen_Call"
+    2219396784:"@Minion_Degen_Call",
+    1628177089:"explorer_gems",
+    2441888429:"BasedchadsGamble",
+    1915368269:"NFG_GAMBLES",
+    1294164024:"fortehculture",
+    2144494116:"GM_Degencalls",
+    2030684366:"uranusX100",
+    1903316574:"x666calls",
+    2350707840:"solanadaovolumealerts",
+    2534842510:"@AlphAI_signals_sol_en"
 }
 
 # Словарь для динамического хранения имен каналов
 channel_names_cache = {}
+
+# Файлы базы данных
+DB_FILE = 'tokens_database.json'
+TRACKER_DB_FILE = 'tokens_tracker_database.json'
+TRACKER_EXCEL_FILE = 'tokens_tracker_database.xlsx'
+
+# Хранилище токенов
+tokens_db = {}
+tracker_db = {}  # Хранилище для токенов, достигших MIN_SIGNALS
 
 # Получение имени канала по ID
 async def get_channel_name_async(client, chat_id):
@@ -171,12 +189,6 @@ def get_channel_name(chat_id):
         # Если не нашли, возвращаем общее обозначение
         return f"@channel_{abs(stripped_id)}"
 
-# Файл базы данных для отслеживания токенов
-DB_FILE = 'tokens_database.json'
-
-# Хранилище токенов
-tokens_db = {}
-
 # Функция поиска контрактов Solana
 def extract_solana_contracts(text):
     """Извлекает адреса контрактов Solana из текста."""
@@ -203,8 +215,9 @@ def extract_solana_contracts(text):
 
 # Функция загрузки базы данных
 def load_database():
-    global tokens_db
+    global tokens_db, tracker_db
     try:
+        # Загружаем основную базу данных
         if os.path.exists(DB_FILE):
             with open(DB_FILE, 'r', encoding='utf-8') as f:
                 tokens_db = json.load(f)
@@ -212,18 +225,99 @@ def load_database():
         else:
             logger.info("База данных не найдена, создаем новую")
             tokens_db = {}
+            
+        # Загружаем базу данных с отслеживаемыми токенами
+        if os.path.exists(TRACKER_DB_FILE):
+            with open(TRACKER_DB_FILE, 'r', encoding='utf-8') as f:
+                tracker_db = json.load(f)
+            logger.info(f"Загружено {len(tracker_db)} отслеживаемых токенов из базы данных")
+        else:
+            logger.info("База данных отслеживаемых токенов не найдена, создаем новую")
+            tracker_db = {}
     except Exception as e:
         logger.error(f"Ошибка при загрузке базы данных: {e}")
         tokens_db = {}
+        tracker_db = {}
 
 # Функция сохранения базы данных
 def save_database():
     try:
+        # Сохраняем основную базу данных
         with open(DB_FILE, 'w', encoding='utf-8') as f:
             json.dump(tokens_db, f, ensure_ascii=False, indent=4)
         logger.info(f"Сохранено {len(tokens_db)} токенов в базу данных")
+        
+        # Сохраняем базу данных отслеживаемых токенов
+        save_tracker_database()
     except Exception as e:
         logger.error(f"Ошибка при сохранении базы данных: {e}")
+
+# Функция сохранения базы данных отслеживаемых токенов (JSON)
+def save_tracker_database():
+    try:
+        with open(TRACKER_DB_FILE, 'w', encoding='utf-8') as f:
+            json.dump(tracker_db, f, ensure_ascii=False, indent=4)
+        logger.info(f"Сохранено {len(tracker_db)} отслеживаемых токенов в JSON базу данных")
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении базы данных отслеживаемых токенов: {e}")
+
+# Функция сохранения базы данных отслеживаемых токенов в Excel
+def save_tracker_excel():
+    try:
+        # Подготавливаем данные для Excel
+        excel_data = []
+        for contract, data in tracker_db.items():
+            # Создаем запись для каждого токена
+            row = {
+                'contract': contract,
+                'first_seen': data.get('first_seen', ''),
+                'signal_reached_time': data.get('signal_reached_time', ''),
+                'channel_count': data.get('channel_count', 0),
+                'channels': ', '.join(data.get('channels', [])),
+            }
+            
+            # Добавляем времена обнаружения по каналам
+            channel_times = data.get('channel_times', {})
+            for channel, time in channel_times.items():
+                row[f'time_{channel}'] = time
+                
+            excel_data.append(row)
+            
+        # Создаем DataFrame и сохраняем в Excel
+        df = pd.DataFrame(excel_data)
+        df.to_excel(TRACKER_EXCEL_FILE, index=False)
+        logger.info(f"Сохранено {len(tracker_db)} отслеживаемых токенов в Excel базу данных")
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении Excel базы данных отслеживаемых токенов: {e}")
+
+# Функция добавления токена в базу отслеживания
+def add_to_tracker(contract, token_data):
+    """Добавляет токен, достигший MIN_SIGNALS, в базу отслеживания."""
+    try:
+        # Проверяем, есть ли уже этот токен в базе
+        if contract in tracker_db:
+            logger.info(f"Токен {contract} уже есть в базе отслеживания")
+            return
+        
+        # Формируем данные для трекера
+        tracker_data = {
+            'contract': contract,
+            'first_seen': token_data.get('first_seen', ''),
+            'signal_reached_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'channel_count': token_data.get('channel_count', 0),
+            'channels': token_data.get('channels', []),
+            'channel_times': token_data.get('channel_times', {})
+        }
+        
+        # Добавляем в базу отслеживания
+        tracker_db[contract] = tracker_data
+        logger.info(f"Токен {contract} добавлен в базу отслеживания")
+        
+        # Сохраняем базы данных
+        save_tracker_database()
+        save_tracker_excel()
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении токена в базу отслеживания: {e}")
 
 async def main():
     # Явный вывод о запуске программы
@@ -250,10 +344,9 @@ async def main():
     
     # Отправляем тестовое сообщение
     try:
-        channel_list = ", ".join(SOURCE_CHANNELS.values())
         await client.send_message(
             TARGET_BOT, 
-            f"🔄 Бот запущен и отслеживает каналы: {channel_list}\n\n"
+            f"🔄 Бот запущен и отслеживает каналы: {len(SOURCE_CHANNELS)}\n\n"
             f"ℹ️ Минимальное количество каналов для сигнала: {MIN_SIGNALS}"
         )
         logger.info(f"Тестовое сообщение отправлено боту {TARGET_BOT}")
@@ -303,6 +396,9 @@ async def main():
                                     )
                                     tokens_db[contract]["message_sent"] = True
                                     logger.info(f"Номер контракта {contract} отправлен боту {TARGET_BOT}")
+                                    
+                                    # Добавляем токен в базу отслеживания
+                                    add_to_tracker(contract, tokens_db[contract])
                                 except Exception as e:
                                     logger.error(f"Ошибка при отправке номера контракта: {e}")
                             else:
@@ -328,10 +424,13 @@ async def main():
                             try:
                                 await client.send_message(
                                     TARGET_BOT,
-                                    f"Контракт: {contract}"  # Добавляем префикс "Контракт: ", который есть в паттернах extract_token_address_from_message
+                                    f"Контракт: {contract}"
                                 )
                                 tokens_db[contract]["message_sent"] = True
                                 logger.info(f"Номер контракта {contract} отправлен боту {TARGET_BOT}")
+                                
+                                # Добавляем токен в базу отслеживания
+                                add_to_tracker(contract, tokens_db[contract])
                             except Exception as e:
                                 logger.error(f"Ошибка при отправке номера контракта: {e}")                        
                         # Сохраняем базу данных после добавления нового токена
@@ -354,7 +453,7 @@ async def main():
                 logger.error(f"Ошибка в задаче сохранения: {e}")
                 await asyncio.sleep(60)  # Подождем минуту перед следующей попыткой
     
-    # Запускаем фоновую задачу сохранения (совместимо с Python 3.6)
+    # Запускаем фоновую задачу сохранения
     asyncio.ensure_future(periodic_save())
     
     logger.info(f"Бот запущен и отслеживает каналы: {len(SOURCE_CHANNELS)} шт. MIN_SIGNALS={MIN_SIGNALS}")
