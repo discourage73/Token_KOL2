@@ -218,141 +218,6 @@ def format_message(token_info: Dict[str, Any], initial_data: Optional[Dict[str, 
     
     return message
 
-def format_tokens_list(tokens_data: Dict[str, Dict[str, Any]]) -> str:
-    """Форматирует список токенов для отображения."""
-    if not tokens_data:
-        return "Нет активных токенов за последние 24 часа."
-    
-    message = f"📋 *Список отслеживаемых токенов ({len(tokens_data)} шт.)*\n\n"
-    
-    # Подготавливаем данные токенов
-    growing_tokens = []
-    falling_tokens = []
-    
-    for query, data in tokens_data.items():
-        # Получаем начальный маркет кап
-        initial_market_cap = 0
-        if 'initial_data' in data and 'raw_market_cap' in data['initial_data']:
-            initial_market_cap = data['initial_data'].get('raw_market_cap', 0)
-        
-        # Получаем текущий маркет кап из token_info, если он есть
-        current_market_cap = 0
-        if 'token_info' in data and 'raw_market_cap' in data['token_info']:
-            current_market_cap = data['token_info'].get('raw_market_cap', 0)
-        
-        # Используем ATH маркет кап из хранилища
-        ath_market_cap = data.get('ath_market_cap', 0)
-        
-        # Если ATH не установлен или меньше начального, используем начальный как ATH
-        if not ath_market_cap or (initial_market_cap > ath_market_cap):
-            ath_market_cap = initial_market_cap
-        
-        # Вычисляем максимальный множитель роста от начального до ATH
-        max_multiplier = 1
-        if initial_market_cap and ath_market_cap and initial_market_cap > 0:
-            max_multiplier = ath_market_cap / initial_market_cap
-        
-        # Вычисляем текущий процент относительно начального маркет капа
-        current_multiplier = 1
-        if initial_market_cap and current_market_cap and initial_market_cap > 0:
-            current_multiplier = current_market_cap / initial_market_cap
-        
-        # Получаем тикер из информации о токене
-        ticker = query
-        if 'token_info' in data and 'ticker' in data['token_info']:
-            ticker = data['token_info'].get('ticker', query)
-        
-        # Получаем ссылку на DexScreener
-        dexscreener_link = "#"  # Значение по умолчанию
-        if 'token_info' in data and 'dexscreener_link' in data['token_info']:
-            dexscreener_link = data['token_info'].get('dexscreener_link', "#")
-        
-        # Информация о токене
-        token_info = {
-            'query': query,
-            'ticker': ticker,
-            'initial_market_cap': initial_market_cap,
-            'market_cap': current_market_cap,
-            'ath_market_cap': ath_market_cap,
-            'max_multiplier': max_multiplier,
-            'current_multiplier': current_multiplier,
-            'dexscreener_link': dexscreener_link,
-            # Вычисляем процент падения от начального значения, если есть
-            'decline_percent': 0 if current_multiplier >= 1 else (1 - current_multiplier) * 100
-        }
-        
-        # Распределяем токены на растущие и падающие
-        if current_multiplier >= 1:
-            growing_tokens.append(token_info)
-        else:
-            falling_tokens.append(token_info)
-    
-    # Сортируем растущие токены по убыванию множителя
-    growing_tokens.sort(key=lambda x: x['max_multiplier'], reverse=True)
-    
-    # Сортируем падающие токены по возрастанию процента падения (от меньшей потери к большей)
-    falling_tokens.sort(key=lambda x: x['decline_percent'])
-    
-    # Форматируем растущие токены
-    for i, token in enumerate(growing_tokens, 1):
-        ticker = token['ticker']
-        current_mc = format_number(token['market_cap']) if token['market_cap'] else "Неизвестно"
-        ath_mc = format_number(token['ath_market_cap']) if token['ath_market_cap'] else "Неизвестно"
-        dexscreener_link = token['dexscreener_link']
-        
-        # Форматируем максимальный множитель роста
-        max_mult = token['max_multiplier']
-        
-        # Форматируем множитель
-        if max_mult >= 2:
-            # Если максимальный множитель больше или равен 2, показываем как "xN"
-            growth_mult_str = f"x{int(max_mult)}" if max_mult >= 10 else f"x{max_mult:.1f}"
-        else:
-            # Если максимальный множитель меньше 2, показываем как "+N%"
-            growth_percent = (max_mult - 1) * 100
-            growth_mult_str = f"+{growth_percent:.1f}%"
-        
-        # Основная строка с информацией о токене в порядке: множитель | ATH | CURR
-        token_line = f"{i}. [*{ticker}*]({dexscreener_link}): {growth_mult_str}"
-        
-        # Добавляем ATH маркет кап
-        token_line += f" | ATH {ath_mc}"
-        
-        # Добавляем текущий маркет кап
-        token_line += f" | CURR {current_mc}"
-        
-        message += token_line + "\n"
-    
-    # Добавляем разделитель, если есть и растущие, и падающие токены
-    if growing_tokens and falling_tokens:
-        message += "\n"  # Пустая строка как разделитель
-    
-    # Форматируем падающие токены
-    for i, token in enumerate(falling_tokens, len(growing_tokens) + 1):
-        ticker = token['ticker']
-        current_mc = format_number(token['market_cap']) if token['market_cap'] else "Неизвестно"
-        ath_mc = format_number(token['ath_market_cap']) if token['ath_market_cap'] else "Неизвестно"
-        dexscreener_link = token['dexscreener_link']
-        
-        # Форматируем процент падения
-        decline_percent = token['decline_percent']
-        decline_str = f"-{decline_percent:.1f}%"
-        
-        # Основная строка с информацией о токене в порядке: падение | ATH | CURR
-        token_line = f"{i}. [*{ticker}*]({dexscreener_link}): {decline_str}"
-        
-        # Добавляем ATH маркет кап
-        token_line += f" | ATH {ath_mc}"
-        
-        # Добавляем текущий маркет кап
-        token_line += f" | CURR {current_mc}"
-        
-        message += token_line + "\n"
-    
-        message += "\n_Отправьте_ `/delete ТИКЕР` _для удаления токена из списка._"
-    
-    return message
-
 def remove_specific_token(token_storage, token_query: str):
     """
     Удаляет указанный токен из хранилища.
@@ -387,3 +252,200 @@ def remove_specific_token(token_storage, token_query: str):
     
     # Если токен не найден
     return None
+
+def format_tokens_list(tokens_data: Dict[str, Dict[str, Any]], page: int = 0, tokens_per_page: int = 10) -> tuple:
+    """
+    Форматирует список токенов для отображения с процентами от ATH.
+    Возвращает кортеж (message, total_pages, current_page)
+    """
+    if not tokens_data:
+        return ("Нет активных токенов в списке отслеживаемых.", 1, 0)
+    
+    # Получаем количество скрытых токенов для информации
+    hidden_info = ""
+    try:
+        # Импортируем модуль token_storage, если он еще не импортирован
+        import token_storage as ts
+        hidden_tokens_count = len(ts.get_hidden_tokens())
+        hidden_info = f" (скрытых: {hidden_tokens_count})" if hidden_tokens_count > 0 else ""
+    except Exception as e:
+        logger.error(f"Ошибка при получении скрытых токенов: {str(e)}")
+    
+    # Подготавливаем данные токенов для сортировки
+    token_info_list = []
+    
+    try:
+        for query, data in tokens_data.items():
+            # Пропускаем скрытые токены
+            if data.get('hidden', False):
+                continue
+                
+            # Безопасно получаем данные с проверками на None
+            token_info = {}
+            token_info['query'] = query
+            
+            # Получаем тикер
+            token_info['ticker'] = query
+            if data.get('token_info', {}).get('ticker'):
+                token_info['ticker'] = data['token_info']['ticker']
+            
+            # Получаем время добавления и преобразуем его в полную дату и время
+            token_info['initial_time'] = "Неизвестно"
+            token_info['added_date'] = ""
+            
+            if data.get('added_time'):
+                # Преобразуем timestamp в дату и время
+                import datetime
+                added_datetime = datetime.datetime.fromtimestamp(data.get('added_time', 0))
+                token_info['initial_time'] = added_datetime.strftime("%H:%M:%S")
+                token_info['added_date'] = added_datetime.strftime("%Y-%m-%d")
+                token_info['full_datetime'] = added_datetime.strftime("%Y-%m-%d %H:%M:%S")
+            elif data.get('initial_data', {}).get('time'):
+                token_info['initial_time'] = data['initial_data']['time']
+            
+            # Получаем начальный маркет кап
+            token_info['initial_market_cap'] = 0
+            if data.get('initial_data', {}).get('raw_market_cap'):
+                token_info['initial_market_cap'] = data['initial_data']['raw_market_cap']
+            
+            # Получаем текущий маркет кап
+            token_info['current_market_cap'] = 0
+            if data.get('token_info', {}).get('raw_market_cap'):
+                token_info['current_market_cap'] = data['token_info']['raw_market_cap']
+            
+            # Получаем ATH маркет кап
+            token_info['ath_market_cap'] = data.get('ath_market_cap', 0)
+            
+            # Если ATH не установлен или меньше начального, используем начальный как ATH
+            if not token_info['ath_market_cap'] or (token_info['initial_market_cap'] > token_info['ath_market_cap']):
+                token_info['ath_market_cap'] = token_info['initial_market_cap']
+            
+            # Безопасно вычисляем проценты для ATH и текущего значения
+            token_info['ath_percent'] = 0
+            if token_info['initial_market_cap'] and token_info['ath_market_cap'] and token_info['initial_market_cap'] > 0:
+                token_info['ath_percent'] = ((token_info['ath_market_cap'] / token_info['initial_market_cap']) - 1) * 100
+            
+            token_info['curr_percent'] = 0
+            if token_info['initial_market_cap'] and token_info['current_market_cap'] and token_info['initial_market_cap'] > 0:
+                token_info['curr_percent'] = ((token_info['current_market_cap'] / token_info['initial_market_cap']) - 1) * 100
+            
+            # Получаем ссылку на DexScreener
+            token_info['dexscreener_link'] = "#"
+            if data.get('token_info', {}).get('dexscreener_link'):
+                token_info['dexscreener_link'] = data['token_info']['dexscreener_link']
+            
+            token_info_list.append(token_info)
+        
+        # Сортируем токены по проценту роста ATH (от наибольшего к наименьшему)
+        token_info_list.sort(key=lambda x: x.get('ath_percent', 0), reverse=True)
+    except Exception as e:
+        logger.error(f"Ошибка при подготовке данных токенов: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return ("Произошла ошибка при формировании списка токенов. Пожалуйста, попробуйте позже.", 1, 0)
+    
+    # Расчет количества страниц
+    total_tokens = len(token_info_list)
+    total_pages = (total_tokens + tokens_per_page - 1) // tokens_per_page  # Округление вверх
+    
+    # Проверка валидности номера страницы
+    if page < 0:
+        page = 0
+    elif page >= total_pages and total_pages > 0:
+        page = total_pages - 1
+    
+    # Начало и конец диапазона токенов для текущей страницы
+    start_idx = page * tokens_per_page
+    end_idx = min(start_idx + tokens_per_page, total_tokens)
+    
+    # Токены для текущей страницы
+    page_tokens = token_info_list[start_idx:end_idx]
+    
+    # Заголовок сообщения
+    message = f"📋 *Список отслеживаемых токенов ({total_tokens} шт.){hidden_info}*\n"
+    message += f"Страница {page + 1} из {total_pages}\n\n"
+    
+    # Загрузим tracker_db для получения эмодзи токенов
+    tracker_emojis = {}
+    try:
+        import json
+        import os
+        
+        # Загружаем JSON файл tracker_db для получения эмодзи
+        if os.path.exists('tokens_tracker_database.json'):
+            with open('tokens_tracker_database.json', 'r', encoding='utf-8') as f:
+                tracker_db = json.load(f)
+                
+            # Сохраняем эмодзи из tracker_db
+            for token_query, token_data in tracker_db.items():
+                if 'emojis' in token_data:
+                    tracker_emojis[token_query] = token_data['emojis']
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке эмодзи из tracker_db: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+    
+    # Форматируем список токенов для текущей страницы
+    try:
+        for i, token in enumerate(page_tokens, start=start_idx + 1):
+            ticker = token.get('ticker', 'Неизвестно')
+            query = token.get('query', '')
+            
+            # Получаем полную дату и время
+            if token.get('full_datetime'):
+                date_time_str = token.get('full_datetime')
+            else:
+                added_date = token.get('added_date', '')
+                initial_time = token.get('initial_time', 'Неизвестно')
+                date_time_str = f"{added_date} {initial_time}" if added_date else initial_time
+            
+            dexscreener_link = token.get('dexscreener_link', '#')
+            
+            # Безопасное форматирование чисел
+            initial_mc = format_number(token.get('initial_market_cap', 0)) if token.get('initial_market_cap') else "Неизвестно"
+            current_mc = format_number(token.get('current_market_cap', 0)) if token.get('current_market_cap') else "Неизвестно"
+            ath_mc = format_number(token.get('ath_market_cap', 0)) if token.get('ath_market_cap') else "Неизвестно"
+            
+            # Форматируем проценты для ATH и текущего значения
+            ath_percent = token.get('ath_percent', 0)
+            curr_percent = token.get('curr_percent', 0)
+            
+            ath_percent_str = f"+{ath_percent:.1f}%" if ath_percent >= 0 else f"{ath_percent:.1f}%"
+            curr_percent_str = f"+{curr_percent:.1f}%" if curr_percent >= 0 else f"{curr_percent:.1f}%"
+            
+            # Получаем эмодзи для токена из tracker_db
+            emojis = tracker_emojis.get(query, "")
+            
+            # Добавляем информацию о токене в сообщение со ссылкой в названии тикера
+            message += f"{i}. [{ticker}]({dexscreener_link}):\n"
+            message += f"   Time: {date_time_str} Mcap: {initial_mc}\n"
+            message += f"   {ath_percent_str} ATH {ath_mc}\n"
+            message += f"   {curr_percent_str} CURR {current_mc}\n"
+            
+            # Добавляем строку эмодзи после строки с CURR, если они есть
+            if emojis:
+                message += f"   {emojis}\n"
+            
+            message += "\n"
+    except Exception as e:
+        logger.error(f"Ошибка при форматировании списка токенов: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return ("Произошла ошибка при форматировании списка токенов. Пожалуйста, попробуйте позже.", 1, 0)
+    
+    # Добавляем информацию о командах
+    if page == total_pages - 1:  # Только на последней странице
+        message += f"Используйте `/clear` для управления токенами.\n"
+        message += f"Отправьте `/excel` для формирования Excel файла со всеми данными."
+    
+    return (message, total_pages, page)
+
+def format_growth_message(ticker: str, current_multiplier: int, market_cap: str) -> str:
+    """Форматирует сообщение о росте токена с огоньками по количеству множителя."""
+    fire_emojis = "🔥" * current_multiplier
+    
+    return (
+        f"{fire_emojis}\n"
+        f"Токен *{ticker}* вырос в *{current_multiplier}x* от начального значения!\n\n"
+        f"💰 Текущий Market Cap: {market_cap}"
+    )

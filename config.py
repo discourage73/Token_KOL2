@@ -4,7 +4,7 @@ from typing import Final
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.WARNING
 )
 
 logger = logging.getLogger(__name__)
@@ -25,8 +25,8 @@ TARGET_BOT: Final = "RadarDexBot"
 # Настройки для message_forwarder.py
 # Источники сообщений (имена ботов)
 SOURCE_BOTS = [
-    "AlphAI_Signals_Bot",  # без символа @ в начале
-    "ray_aqua_bot"         # без символа @ в начале
+    "TheMobyBot",  # без символа @ в начале
+    "ray_cyan_bot"         # без символа @ в начале
 ]
 
 # Целевой канал для пересылки из ботов

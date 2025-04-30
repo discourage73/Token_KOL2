@@ -6,7 +6,6 @@ import re
 import os
 import time
 import signal
-import shutil
 from datetime import datetime
 
 # Исправляем кодировку для Windows
@@ -23,14 +22,14 @@ if sys.platform == 'win32':
 # Импортируем конфигурацию
 try:
     from config import (API_ID, API_HASH, SOURCE_BOTS, TARGET_CHANNEL, 
-                        NEWS_CHANNELS, NEWS_TARGET_CHANNEL, logger)
+                      NEWS_CHANNELS, NEWS_TARGET_CHANNEL, logger)
     # Используем логгер из config.py
     USING_CONFIG_LOGGER = True
 except ImportError:
     # Значения для независимого запуска (замените на свои!)
     API_ID = 25308063
     API_HASH = "458e1315175e0103f19d925204b690a5"
-    SOURCE_BOTS = ["AlphAI_Signals_Bot", "ray_aqua_bot"]
+    SOURCE_BOTS = ["TheMobyBot", "ray_cyan_bot"]
     TARGET_CHANNEL = "cringemonke"
     NEWS_CHANNELS = ["cointelegraph", "coindesk", "WatcherGuru"]
     NEWS_TARGET_CHANNEL = "MoonCryptoMonkey"
@@ -57,481 +56,313 @@ except ImportError:
     
     logger.warning("Не удалось импортировать config.py, используются встроенные значения")
 
-# Хранилище для исключения дубликатов сообщений
-message_hashes = set()
-MAX_HASH_CACHE = 1000  # Максимальное количество хешей в кэше
-
 # Глобальная переменная для отслеживания статуса работы
 is_running = True
 
-
-def hash_message(message):
-    """Создает хеш сообщения для определения дубликатов."""
-    if hasattr(message, 'text') and message.text:
-        # Используем текст сообщения и время для хеширования
-        return hash(f"{message.text}{message.date}")
-    elif hasattr(message, 'message') and message.message:
-        # Для случаев, когда сообщение вложено
-        return hash(f"{message.message}{message.date}")
-    else:
-        # Если нет текста, используем только время
-        return hash(f"{message.date}")
-
-
-async def extract_and_format_alphai_data(message):
+async def extract_and_format_ray_cyan_data(message):
     """
-    Извлекает и форматирует ключевую информацию из сообщений AlphAI_Signals_Bot.
-    Возвращает отформатированный текст или None, если данные не найдены.
+    Извлекает и форматирует ключевую информацию из сообщений ray_cyan_bot.
+    Возвращает отформатированный текст с только необходимой информацией.
     """
     if not hasattr(message, 'text') or not message.text:
         return None
         
     text = message.text
     
-    # Проверяем, что это сообщение от AlphAI_Signals_Bot с KOL Calls
-    if "**KOL Calls**" not in text and "KOL Call:" not in text:
+    # Проверяем, что это сообщение о покупке токена
+    if "BUY" not in text:
+        # Если это не сообщение о покупке, возвращаем None, чтобы использовалась стандартная обработка
         return None
-        
-    # Пробуем извлечь основные данные с помощью регулярных выражений
     
-    # Извлекаем CA (Contract Address)
-    ca_match = re.search(r'CA:[\s`]*([a-zA-Z0-9]+)', text)
-    ca = ca_match.group(1) if ca_match else "N/A"
-    
-    # Извлекаем Tag
-    tag_match = re.search(r'Tag:([^\n]+)', text)
-    tag = tag_match.group(1).strip() if tag_match else "N/A"
-    
-    # Извлекаем Market Cap
-    mcap_match = re.search(r'Market Cap:[\s]*(\$[0-9.]+[KMB]?)', text)
-    mcap = mcap_match.group(1) if mcap_match else "N/A"
-    
-    # Извлекаем Liquidity
-    liq_match = re.search(r'Liq:[\s]*(\$[0-9.]+[KMB]?)', text)
-    liq = liq_match.group(1) if liq_match else "N/A"
-    
-    # Извлекаем Holders
-    holders_match = re.search(r'Holders:[\s]*([0-9.]+[KMB]?)', text)
-    holders = holders_match.group(1) if holders_match else "N/A"
-    
-    # Извлекаем Score
-    score_match = re.search(r'Score:[\s]*([0-9]+/[0-9]+)', text)
-    score = score_match.group(1) if score_match else "N/A"
-    
-    # Извлекаем Age
-    age_match = re.search(r'Age:[\s]*([^\n]+)', text)
-    age = age_match.group(1).strip() if age_match else "N/A"
-    
-    # Извлекаем Smart Money Holders
-    sm_match = re.search(r'([0-9]+)[\s]*Smart Money Holders', text)
-    smart_money = sm_match.group(1) if sm_match else "N/A"
-    
-    # Извлекаем информацию о Permission и Top Holders
-    permission_match = re.search(r'(Permission Revoked[^0-9]*Top 10 Holders:[^%]*%)', text)
-    permissions = permission_match.group(1).strip() if permission_match else "N/A"
-    
-    # Извлекаем KOL Call и информацию о просмотрах
-    kol_match = re.search(r'KOL Call:[\s]*([0-9]+)[\s]*\|[\s]*Fans:[\s]*([0-9.]+[KMB]?)[\s]*\|[\s]*Views:[\s]*([0-9.]+[KMB]?)', text)
-    if kol_match:
-        kol_count = kol_match.group(1)
-        fans = kol_match.group(2)
-        views = kol_match.group(3)
-    else:
-        kol_count = "N/A"
-        fans = "N/A"
-        views = "N/A"
-    
-    # Формируем сокращенное сообщение с важной информацией
-    formatted_text = f"""CA: {ca}
-Tag: {tag}
-Market Cap: {mcap}
-💧 Liq: {liq}
-👥 Holders: {holders} | Score: {score}
-⏰ Age: {age}
-🧠 {smart_money} Smart Money Holders
-{permissions}
-KOL Call: {kol_count} | Fans: {fans} | Views: {views}"""
-
-    return formatted_text
-
-
-async def safe_forward_message(client, message, target):
-    """Обрабатывает сообщения от источников и отправляет в целевой канал."""
     try:
-        # Создаем хеш сообщения для проверки дубликатов
-        msg_hash = hash_message(message)
+        # Извлекаем название токена
+        buy_match = re.search(r'BUY ([^\s\(\)]+)', text)
+        token_name = buy_match.group(1) if buy_match else "UNKNOWN"
         
-        # Проверяем, не является ли сообщение дубликатом
-        if msg_hash in message_hashes:
-            logger.info(f"Пропуск дубликата сообщения: {message.id}")
-            return None
+        # ИСПРАВЛЕНИЕ: Правильно извлекаем платформу
+        # Вначале ищем в строке вида "BUY TOKEN on PLATFORM"
+        platform_match = re.search(r'BUY [^\s\(\)]+ on ([A-Z\s]+)', text)
+        platform = platform_match.group(1).strip() if platform_match else ""
         
-        # Добавляем хеш в кэш и очищаем кэш, если он слишком большой
-        message_hashes.add(msg_hash)
-        if len(message_hashes) > MAX_HASH_CACHE:
-            # Удаляем самый старый хеш (итерация по set непредсказуема, но это не критично)
-            message_hashes.pop()
-        
-        # Получаем источник сообщения
-        source = None
-        if hasattr(message.chat, 'username'):
-            source = message.chat.username
-        
-        # Обрабатываем сообщение в зависимости от источника
-        text_to_send = None
-        
-        # Обработка сообщений от AlphAI_Signals_Bot
-        if source == "AlphAI_Signals_Bot":
-            logger.info(f"Обработка сообщения от AlphAI_Signals_Bot (ID: {message.id})")
-            # Извлекаем только нужные данные
-            text_to_send = await extract_and_format_alphai_data(message)
-            
-            if not text_to_send:
-                logger.info(f"Сообщение от AlphAI_Signals_Bot не содержит нужных данных, пропускаем")
-                return None
-        
-        # Обработка сообщений от ray_aqua_bot - просто копируем текст
-        elif source == "ray_aqua_bot":
-            logger.info(f"Обработка сообщения от ray_aqua_bot (ID: {message.id})")
-            if hasattr(message, 'text') and message.text:
-                text_to_send = message.text
-            elif hasattr(message, 'caption') and message.caption:
-                text_to_send = message.caption
-        
-        # Если текст для отправки не был определен, пропускаем сообщение
-        if not text_to_send:
-            logger.info(f"Не удалось извлечь текст для отправки из сообщения {message.id}")
-            return None
-        
-        # Отправляем подготовленный текст
-        logger.info(f"Отправка обработанного текста в канал @{target}")
-        result = await client.send_message(
-            target,
-            text_to_send,
-            parse_mode=None,  # Сохраняем исходное форматирование
-            link_preview=True  # Сохраняем превью ссылок
-        )
-        
-        logger.info(f"Текст успешно отправлен, новый ID: {result.id if result else 'N/A'}")
-        
-        # Добавляем небольшую задержку после отправки
-        await asyncio.sleep(1)
-        
-        return result
-    except Exception as e:
-        logger.error(f"Ошибка при обработке сообщения {message.id}: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None
-
-
-async def copy_news_message(client, message, target):
-    """Копирует сообщение из новостного канала вместе с медиафайлами, сохраняя форматирование."""
-    try:
-        # Создаем хеш сообщения для проверки дубликатов
-        msg_hash = hash_message(message)
-        
-        # Проверяем, не является ли сообщение дубликатом
-        if msg_hash in message_hashes:
-            logger.info(f"Пропуск дубликата новостного сообщения: {message.id}")
-            return None
-        
-        # Добавляем хеш в кэш и очищаем кэш, если он слишком большой
-        message_hashes.add(msg_hash)
-        if len(message_hashes) > MAX_HASH_CACHE:
-            # Удаляем самый старый хеш (итерация по set непредсказуема, но это не критично)
-            message_hashes.pop()
-        
-        # Получаем имя источника
-        source_name = message.chat.username if hasattr(message.chat, 'username') else f"chat_{message.chat_id}"
-        logger.info(f"Копирование новостного сообщения из {source_name} (ID: {message.id})")
-        
-        # Вместо обработки, пересылаем сообщение напрямую с сохранением форматирования
-        # Это обеспечит точное копирование форматирования сообщения и медиа
-        try:
-            result = await client.forward_messages(target, message)
-            logger.info(f"Сообщение успешно переслано в {target}, новый ID: {result[0].id if result else 'N/A'}")
-            return result
-        except Exception as e:
-            logger.error(f"Ошибка при прямой пересылке сообщения: {e}")
-            # Если прямая пересылка не удалась, попробуем другой способ
-            logger.info("Попытка альтернативного копирования сообщения...")
-        
-        # Извлекаем текст сообщения из разных возможных полей
-        text = None
-        if hasattr(message, 'message') and message.message:
-            text = message.message
-        elif hasattr(message, 'text') and message.text:
-            text = message.text
-        elif hasattr(message, 'caption') and message.caption:
-            text = message.caption
-        
-        # Проверяем наличие медиа
-        has_media = False
-        
-        # Создаем временную директорию для медиафайлов, если ее нет
-        if not os.path.exists('temp'):
-            os.makedirs('temp')
-        
-        # Путь к медиафайлу, если он будет скачан
-        file_path = None
-        
-        # Проверяем различные типы медиа
-        if hasattr(message, 'photo') and message.photo:
-            has_media = True
-            try:
-                file_path = await message.download_media(file="temp/")
-                logger.info(f"Скачано фото из сообщения {message.id}: {file_path}")
-            except Exception as e:
-                logger.error(f"Ошибка при скачивании фото: {e}")
-                has_media = False
-                
-        elif hasattr(message, 'video') and message.video:
-            has_media = True
-            try:
-                file_path = await message.download_media(file="temp/")
-                logger.info(f"Скачано видео из сообщения {message.id}: {file_path}")
-            except Exception as e:
-                logger.error(f"Ошибка при скачивании видео: {e}")
-                has_media = False
-                
-        elif hasattr(message, 'document') and message.document:
-            has_media = True
-            try:
-                file_path = await message.download_media(file="temp/")
-                logger.info(f"Скачан документ из сообщения {message.id}: {file_path}")
-            except Exception as e:
-                logger.error(f"Ошибка при скачивании документа: {e}")
-                has_media = False
-        
-        # Теперь отправляем сообщение с медиа или без
-        result = None
-        
-        if has_media and file_path:
-            # Отправляем медиафайл с подписью (если есть текст)
-            try:
-                result = await client.send_file(
-                    target,
-                    file_path,
-                    caption=text if text else None,
-                    parse_mode='html'  # Используем HTML для сохранения форматирования
-                )
-                logger.info(f"Отправлено сообщение с медиа в {target}, новый ID: {result.id if result else 'N/A'}")
-            except Exception as e:
-                logger.error(f"Ошибка при отправке медиафайла: {e}")
-                # В случае ошибки, попробуем отправить только текст
-                if text:
-                    try:
-                        result = await client.send_message(
-                            target,
-                            text,
-                            parse_mode='html'
-                        )
-                        logger.info(f"Отправлен только текст (без медиа) в {target}")
-                    except Exception as text_error:
-                        logger.error(f"Не удалось отправить даже текст: {text_error}")
-            
-            # Удаляем временный файл
-            try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    logger.info(f"Удален временный файл: {file_path}")
-            except Exception as e:
-                logger.error(f"Ошибка при удалении временного файла: {e}")
-                
-        elif text:
-            # Если нет медиа, но есть текст, отправляем только текст
-            try:
-                result = await client.send_message(
-                    target,
-                    text,
-                    parse_mode='html'  # Используем HTML для сохранения форматирования
-                )
-                logger.info(f"Отправлено текстовое сообщение в {target}, новый ID: {result.id if result else 'N/A'}")
-            except Exception as e:
-                logger.error(f"Ошибка при отправке текста: {e}")
+        # Если не нашли или платформа является точно PumpSwap/PUMP FUN, то оставляем пустой строкой 
+        # (по требованию: "можно вообще удалить и не писать")
+        if not platform or platform == "PumpSwap" or platform == "PUMP FUN":
+            platform = ""
         else:
-            # Если нет ни медиа, ни текста, логируем это
-            logger.warning(f"Сообщение {message.id} не содержит ни медиа, ни текста. Пропускаем.")
-            return None
+            platform = f" on {platform}"
         
-        # Добавляем небольшую задержку после отправки
-        await asyncio.sleep(1)
+        # Извлекаем процент и числа
+        percent_match = re.search(r'([0-9.]+%) ([0-9,]+)/([0-9,]+)', text)
+        percent = percent_match.group(1) if percent_match else ""
+        numbers = f"{percent_match.group(2)}/{percent_match.group(3)}" if percent_match else ""
         
-        return result
+        # Извлекаем информацию о свопе SOL
+        swap_match = re.search(r'swapped\s+([0-9.]+)\s+SOL', text)
+        sol_amount = swap_match.group(1) if swap_match else ""
+        
+        # Если не нашли в первом регулярном выражении, ищем другой формат
+        if not sol_amount:
+            alt_swap_match = re.search(r'([0-9.]+)\s*SOL for', text)
+            sol_amount = alt_swap_match.group(1) if alt_swap_match else ""
+        
+        # Извлекаем Market Cap (MC)
+        mc_match = re.search(r'MC:?\s*(\$[0-9.]+[KMB]?)', text)
+        mc_value = mc_match.group(1) if mc_match else ""
+        
+        # Извлекаем информацию о времени (Seen)
+        seen_match = re.search(r'Seen:?\s*([0-9]+[mhd][:\s]*[0-9]*[mhd]?)', text)
+        seen_value = seen_match.group(1) if seen_match else ""
+        
+        # ИСПРАВЛЕНИЕ: Лучший способ извлечь адрес контракта
+        # 1. Сначала ищем адрес в последней строке, где только буквы и цифры
+        lines = text.split('\n')
+        address = ""
+        
+        # Ищем в обратном порядке (снизу вверх)
+        for line in reversed(lines):
+            line = line.strip()
+            # Проверяем, что строка содержит только буквы и цифры и имеет нужную длину
+            if re.match(r"^[A-Za-z0-9]{32,44}$", line):
+                address = line
+                break
+        
+        # 2. Если не нашли в отдельной строке, ищем любой подходящий адрес в тексте
+        if not address:
+            # Общий поиск адреса в любой части текста
+            addr_matches = re.findall(r'[A-Za-z0-9]{32,44}', text)
+            if addr_matches:
+                # Берем последний найденный адрес (обычно самый релевантный)
+                address = addr_matches[-1]
+        
+        # 3. Если всё еще не нашли, пробуем специфичные для PumpFun форматы
+        if not address:
+            # Ищем адреса в формате токенов с "pump" в конце
+            pump_addr_match = re.search(r'([A-Za-z0-9]{6,}[A-Za-z0-9]*pump)["\s\)]', text)
+            address = pump_addr_match.group(1) if pump_addr_match else ""
+            
+            # Если не нашли по шаблону выше, ищем в URL ссылках
+            if not address:
+                addr_url_match = re.search(r'/token/([A-Za-z0-9]{6,}[A-Za-z0-9]*pump)', text)
+                address = addr_url_match.group(1) if addr_url_match else ""
+        
+        # Логируем найденный адрес для отладки - ИСПРАВЛЕНО
+        logger.info("Извлеченный адрес контракта: {}".format(address))
+        
+        # Проверяем, удалось ли извлечь адрес
+        if not address:
+            logger.warning("Не удалось извлечь адрес контракта из сообщения")
+        
+        # Формируем дополнительную информацию
+        additional_info = ""
+        if mc_value:
+            additional_info += f" | MC: {mc_value}"
+        if seen_value:
+            additional_info += f" | Seen: {seen_value}"
+        
+        # Форматируем сообщение согласно требованиям
+        formatted_text = f"""🟢 BUY {token_name}{platform}
+
+🔹 {percent} {numbers} swapped {sol_amount} SOL{additional_info}
+
+{address}"""
+
+        return formatted_text
     except Exception as e:
-        logger.error(f"Ошибка при копировании новостного сообщения {message.id}: {e}")
+        logger.error("Ошибка при извлечении данных из сообщения ray_cyan_bot: {}".format(e))
         import traceback
         logger.error(traceback.format_exc())
         return None
 
+
+async def extract_and_format_whale_alerts(message):
+    """
+    Извлекает и форматирует информацию из сообщений о китах (Whale Alerts).
+    Возвращает отформатированный текст с только необходимой информацией.
+    Обрабатывает только сообщения с "just bought", игнорирует "just sold".
+    """
+    if not hasattr(message, 'text') or not message.text:
+        return None
+        
+    text = message.text
+    
+    # Проверяем, что это сообщение о покупке кита (только "just bought")
+    if "New Token Whale Alert" in text and "just bought" in text and "just sold" not in text:
+        try:
+            # Извлекаем основную информацию о покупке кита (с учетом разных форматов из скриншотов)
+            whale_info_match = re.search(r'(A .+? Whale just bought \$[\d.]+[KMB]? of .+?)(?=\(|\n|$)', text)
+            whale_info = whale_info_match.group(1).strip() if whale_info_match else ""
+            
+            # Если не нашли информацию о ките, значит, это не интересующее нас сообщение
+            if not whale_info:
+                return None
+            
+            # Проверяем, есть ли "just sold" в тексте сообщения (дополнительная проверка)
+            if "just sold" in whale_info:
+                return None
+                
+            # Извлекаем информацию о маркет капе
+            mc_match = re.search(r'\(MC:?\s*\$([\d.]+[KMB]?)\)', text)
+            mc_info = f"(MC: ${mc_match.group(1)})" if mc_match else ""
+            
+            # Извлекаем адрес контракта - ищем длинную строку из букв и цифр
+            contract_match = re.search(r'([A-Za-z0-9]{30,})', text)
+            contract_address = contract_match.group(1) if contract_match else ""
+            
+            # Форматируем сообщение по требуемому шаблону
+            formatted_text = f"""New Token Whale Alert
+🟢 {whale_info} {mc_info}
+
+{contract_address}"""
+            
+            return formatted_text
+            
+        except Exception as e:
+            logger.error("Ошибка при извлечении данных из сообщения о ките: {}".format(e))
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+    
+    # Если это не сообщение о покупке кита, возвращаем None
+    return None
 
 async def start_forwarding():
-    """Основная функция для запуска копирования сообщений."""
-    # Явный вывод о запуске программы
-    print("Сервис копирования сообщений запущен!")
-    logger.info("Сервис копирования сообщений запущен!")
+    """Основная функция для запуска пересылки сообщений."""
+    print("Сервис пересылки сообщений запущен!")
+    logger.info("Сервис пересылки сообщений запущен!")
     
-    # Создаем директорию для временных файлов, если ее нет
-    if not os.path.exists('temp'):
-        os.makedirs('temp')
-        logger.info("Создана директория для временных файлов")
-    else:
-        # Очищаем директорию от старых файлов
-        try:
-            for file in os.listdir('temp'):
-                file_path = os.path.join('temp', file)
-                try:
-                    if os.path.isfile(file_path):
-                        os.unlink(file_path)
-                except Exception as e:
-                    logger.error(f"Ошибка при удалении файла {file_path}: {e}")
-            logger.info("Временная директория очищена")
-        except Exception as e:
-            logger.error(f"Ошибка при очистке временной директории: {e}")
-    
-    # Подключаемся к Telegram с улучшенными параметрами
-    client = TelegramClient(
-        'forwarder_session', 
-        API_ID, 
-        API_HASH,
-        connection_retries=10,
-        retry_delay=5,
-        auto_reconnect=True,
-        request_retries=10
-    )
-    
+    # Подключаемся к Telegram
+    client = TelegramClient('forwarder_session', API_ID, API_HASH)
     await client.start()
     
-    logger.info("Подключение к Telegram успешно установлено")
+    logger.info("Подключение к Telegram установлено")
     
-    # Отправляем тестовое сообщение в канал для ботов
+    # Отправляем приветственные сообщения
     try:
+        # Отправляем в основной канал для TheMobyBot
         await client.send_message(
             TARGET_CHANNEL, 
-            f"🔄 Сервис копирования текстов сообщений запущен и отслеживает боты: {', '.join(['@' + bot for bot in SOURCE_BOTS])}"
+            f"🔄 Сервис пересылки сообщений запущен и отслеживает бота: @TheMobyBot"
         )
-        logger.info(f"Тестовое сообщение отправлено в канал @{TARGET_CHANNEL}")
-    except Exception as e:
-        logger.error(f"Ошибка при отправке тестового сообщения в канал ботов: {e}")
-    
-    # Отправляем тестовое сообщение в канал для новостей
-    try:
+        logger.info("Приветственное сообщение отправлено в канал @{}".format(TARGET_CHANNEL))
+        
+        # Отправляем в канал для ray_cyan_bot
+        await client.send_message(
+            "cringemonke2", 
+            f"🔄 Сервис пересылки сообщений запущен и отслеживает бота: @ray_cyan_bot"
+        )
+        logger.info("Приветственное сообщение отправлено в канал @cringemonke2")
+        
+        # Отправляем в канал для новостей
+        news_channels_list = ", ".join([f"@{channel}" for channel in NEWS_CHANNELS])
         await client.send_message(
             NEWS_TARGET_CHANNEL, 
-            f"🔄 Сервис копирования новостей запущен и отслеживает каналы: {', '.join(['@' + channel for channel in NEWS_CHANNELS])}"
+            f"🔄 Сервис пересылки новостей запущен и отслеживает каналы: {news_channels_list}"
         )
-        logger.info(f"Тестовое сообщение отправлено в канал @{NEWS_TARGET_CHANNEL}")
+        logger.info("Приветственное сообщение отправлено в канал @{}".format(NEWS_TARGET_CHANNEL))
     except Exception as e:
-        logger.error(f"Ошибка при отправке тестового сообщения в канал новостей: {e}")
+        logger.error("Ошибка при отправке приветственного сообщения: {}".format(e))
     
-    # Получаем идентификаторы ботов
-    bot_entities = []
-    for bot_username in SOURCE_BOTS:
-        try:
-            entity = await client.get_entity(bot_username)
-            bot_entities.append(entity)
-            logger.info(f"Бот @{bot_username} найден, ID: {entity.id}")
-        except Exception as e:
-            logger.error(f"Ошибка при получении сущности бота @{bot_username}: {e}")
-    
-    # Получаем идентификаторы новостных каналов
-    news_entities = []
-    for channel_username in NEWS_CHANNELS:
-        try:
-            entity = await client.get_entity(channel_username)
-            news_entities.append(entity)
-            logger.info(f"Канал @{channel_username} найден, ID: {entity.id}")
-        except Exception as e:
-            logger.error(f"Ошибка при получении сущности канала @{channel_username}: {e}")
-    
-    # Регистрируем обработчик событий для сообщений от ботов
-    @client.on(events.NewMessage(from_users=bot_entities))
-    async def bot_handler(event):
-        global is_running
+    # Регистрируем обработчик для всех входящих сообщений
+    @client.on(events.NewMessage())
+    async def handler(event):
         if not is_running:
-            return  # Прекращаем обработку, если получен сигнал остановки
+            return
             
         try:
-            # Получаем имя источника
-            source_name = event.chat.username if hasattr(event.chat, 'username') else f"chat_{event.chat_id}"
-            logger.info(f"Получено новое сообщение от бота @{source_name} (ID: {event.message.id})")
+            # Получаем имя отправителя
+            sender = event.sender
+            sender_username = sender.username if sender else "Unknown"
             
-            # Обрабатываем и отправляем сообщение
-            await safe_forward_message(client, event.message, TARGET_CHANNEL)
+            # Пересылка от TheMobyBot в TARGET_CHANNEL
+            if sender_username == "TheMobyBot":
+                logger.info("Получено сообщение от @TheMobyBot")
+                
+                # Пересылаем текст сообщения в целевой канал
+                if hasattr(event.message, 'text') and event.message.text:
+                    # ИСПРАВЛЕНИЕ: Проверяем сначала, содержит ли сообщение "just sold"
+                    # Если да, то полностью игнорируем его
+                    if "just sold" in event.message.text:
+                        logger.info("Сообщение содержит 'just sold', игнорируем")
+                        return
+                    
+                    # Проверяем, является ли сообщение сообщением о ките
+                    formatted_text = await extract_and_format_whale_alerts(event.message)
+                    
+                    if formatted_text:
+                        logger.info("Обнаружено сообщение о ките, применяем форматирование")
+                    else:
+                        logger.info("Сообщение не распознано как сообщение о ките, пересылаем как есть")
+                    
+                    # Если не удалось отформатировать или это не сообщение о ките, используем оригинальный текст
+                    text_to_send = formatted_text if formatted_text else event.message.text
+                    
+                    try:
+                        await client.send_message(TARGET_CHANNEL, text_to_send)
+                        logger.info("Сообщение от @TheMobyBot переслано в @{}".format(TARGET_CHANNEL))
+                    except Exception as e:
+                        logger.error("Ошибка при пересылке сообщения от TheMobyBot: {}".format(e))
+                        import traceback
+                        logger.error(traceback.format_exc())
             
+            # Пересылка от ray_cyan_bot в cringemonke2
+            elif sender_username == "ray_cyan_bot":
+                logger.info("Получено сообщение от @ray_cyan_bot")
+                
+                # Применяем фильтр и форматирование для ray_cyan_bot
+                if hasattr(event.message, 'text') and event.message.text:
+                    formatted_text = await extract_and_format_ray_cyan_data(event.message)
+                    
+                    # Если не удалось отформатировать, используем оригинальный текст
+                    text_to_send = formatted_text if formatted_text else event.message.text
+                    
+                    try:
+                        await client.send_message("cringemonke2", text_to_send)
+                        logger.info("Сообщение от @ray_cyan_bot переслано в @cringemonke2")
+                    except Exception as e:
+                        logger.error("Ошибка при пересылке сообщения от ray_cyan_bot: {}".format(e))
+                        import traceback
+                        logger.error(traceback.format_exc())
+            
+            # Пересылка из новостных каналов
+            elif sender_username in NEWS_CHANNELS:
+                logger.info("Получено сообщение от новостного канала @{}".format(sender_username))
+                
+                # Пересылаем текст в канал для новостей
+                if hasattr(event.message, 'text') and event.message.text:
+                    try:
+                        await client.send_message(NEWS_TARGET_CHANNEL, event.message.text)
+                        logger.info("Новость от @{} переслана в @{}".format(sender_username, NEWS_TARGET_CHANNEL))
+                    except Exception as e:
+                        logger.error("Ошибка при пересылке новости: {}".format(e))
+                        import traceback
+                        logger.error(traceback.format_exc())
         except Exception as e:
-            logger.error(f"Ошибка при обработке сообщения от бота: {e}")
+            logger.error("Ошибка при обработке сообщения: {}".format(e))
             import traceback
             logger.error(traceback.format_exc())
     
-    # Регистрируем обработчик событий для сообщений из новостных каналов
-    @client.on(events.NewMessage(from_users=news_entities))
-    async def news_handler(event):
-        global is_running
-        if not is_running:
-            return  # Прекращаем обработку, если получен сигнал остановки
-            
-        try:
-            # Получаем имя источника
-            source_name = event.chat.username if hasattr(event.chat, 'username') else f"chat_{event.chat_id}"
-            logger.info(f"Получено новое сообщение из новостного канала @{source_name} (ID: {event.message.id})")
-            
-            # Копируем сообщение в целевой канал новостей
-            await copy_news_message(client, event.message, NEWS_TARGET_CHANNEL)
-            
-        except Exception as e:
-            logger.error(f"Ошибка при обработке новостного сообщения: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-    
-    # Держим соединение активным
+    # Держим соединение активным до получения сигнала остановки
     try:
-        total_sources = len(bot_entities) + len(news_entities)
-        logger.info(f"Ожидание новых сообщений от {total_sources} источников...")
+        logger.info("Ожидание сообщений от ботов и каналов...")
         while is_running:
-            await asyncio.sleep(1)  # Проверяем состояние is_running каждую секунду
-        
+            await asyncio.sleep(60)
+            logger.info("Сервис активен, ожидание сообщений...")
     except KeyboardInterrupt:
         logger.info("Сервис остановлен пользователем")
     except Exception as e:
-        logger.error(f"Ошибка в основном цикле: {e}")
+        logger.error("Ошибка в основном цикле: {}".format(e))
         import traceback
         logger.error(traceback.format_exc())
     finally:
-        # Очищаем временные файлы перед выходом
-        try:
-            if os.path.exists('temp'):
-                for file in os.listdir('temp'):
-                    file_path = os.path.join('temp', file)
-                    try:
-                        if os.path.isfile(file_path):
-                            os.unlink(file_path)
-                    except Exception as e:
-                        logger.error(f"Ошибка при удалении файла {file_path}: {e}")
-            logger.info("Временная директория очищена перед выходом")
-        except Exception as e:
-            logger.error(f"Ошибка при очистке временной директории: {e}")
-            
         await client.disconnect()
         logger.info("Соединение закрыто")
-
 
 # Обработчик сигнала прерывания
 def signal_handler(sig, frame):
     global is_running
     logger.info("Получен сигнал прерывания, выполняется выход...")
-    print("Остановка сервиса копирования сообщений...")
-    
-    # Устанавливаем флаг для остановки основного цикла
+    print("Остановка сервиса пересылки сообщений...")
     is_running = False
-
-
-async def main():
-    """Точка входа для асинхронного запуска."""
-    # Запускаем копирование сообщений
-    await start_forwarding()
-
 
 if __name__ == "__main__":
     try:
@@ -542,30 +373,9 @@ if __name__ == "__main__":
         if sys.version_info >= (3, 10):
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         
-        # Запускаем сервис с возможностью перезапуска
-        while True:
-            try:
-                # Сбрасываем флаг при перезапуске
-                is_running = True
-                
-                # Используем новый event loop для каждого запуска
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(main())
-                
-                # Если сервис был остановлен штатно, выходим из цикла
-                if not is_running:
-                    break
-                    
-            except KeyboardInterrupt:
-                logger.info("Сервис остановлен пользователем")
-                break
-            except Exception as e:
-                logger.error(f"Критическая ошибка, перезапуск через 10 секунд: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-                time.sleep(10)  # Ждем 10 секунд перед перезапуском
+        # Запускаем сервис
+        asyncio.run(start_forwarding())
     except Exception as e:
-        print(f"Критическая ошибка при запуске: {e}")
+        print("Критическая ошибка при запуске: {}".format(e))
         import traceback
         print(traceback.format_exc())

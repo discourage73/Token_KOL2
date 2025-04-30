@@ -1,11 +1,16 @@
 from telethon import TelegramClient
+import asyncio
 
 api_id = 25308063
 api_hash = "458e1315175e0103f19d925204b690a5"
-channels = ['@AlphAI_Signals_Bot']
+channels = ['@CrikeyCallz',
+            '@Chadleycalls',
+            '@BaddiesAi']
 
 async def main():
-    async with TelegramClient('test_session', api_id, api_hash) as client:
+    # Используем другое имя сессии, чтобы избежать конфликтов
+    session_name = 'get_ids_session'
+    async with TelegramClient(session_name, api_id, api_hash) as client:
         print("Клиент подключен")
         channel_data = {}
         
@@ -25,6 +30,5 @@ async def main():
         print("}")
 
 if __name__ == "__main__":
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    # Исправляем предупреждение о deprecated get_event_loop
+    asyncio.run(main())

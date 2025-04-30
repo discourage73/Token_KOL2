@@ -70,54 +70,67 @@ def safe_str(text):
 from config import TELEGRAM_TOKEN, logger, DEXSCREENER_API_URL, API_ID, API_HASH, TARGET_BOT
 
 # Минимальное количество каналов для отправки сигнала
-MIN_SIGNALS = 5  # Токен должен появиться минимум в 5 каналах
+MIN_SIGNALS = 6  # Токен должен появиться минимум в 5 каналах
+
+# Словарь соответствия тегов и эмодзи
+TAG_EMOJI_MAP = {
+    "snipeKOL": "🎯",     # дартс
+    "snipeGEM": "💎",     # бриллиант
+    "TG_KOL": "🍀",       # клевер
+    "EarlyGEM": "💎",     # бриллиант
+    "EarlyKOL": "⚡",      # молния
+    "SmartMoney": "💵",   # доллар
+    "Whale Bought": "🐋", # кит
+    "Volume alert": "🚀", # ракета
+    "AlphAI_KOL": "🐂"    # бык
+}
 
 # Каналы для мониторинга (ID канала -> имя)
 SOURCE_CHANNELS = {
-    2234923591: "@Tanjirocall",
-    1853203827:"@CryptoMafiaPlays",
-    2121262250:"@DoctoreDegens",
-    2015299550:"@hardy_trades",
-    1975976600:"@smartmaxidegens",
-    2054466090:"@casgem",
-    2055101998:"@metagambler",
-    1500214409:"@GemsmineEth",
-    1794471884:"@MineGems",
-    1662909092:"@QuartzETH",
-    1603469217:"@ZionGems",
-    2366686880:"@Ranma_Calls_Solana",
-    1510769567:"@BatmanGamble",
-    1818702441:"@michiosuzukiofsatoshicalls",
-    1763265784:"@MarkDegens",
-    1712900374:"@JeetyCall",
-    1983450418:"@shitcoinneverland",
-    2284638367:"@GemDynasty",
-    1554385364:"@SultanPlays",
-    1913209050:"@gigacalls",
-    1869537526:"@POSEIDON_DEGEN_CALLS",
-    1631609672:"@lowtaxcrypto",
-    2088887132:"@sadcatgamble",
-    1851567457:"@Insider_ECA",
-    1756488143:"@lowtaxsolana",
-    1883929251:"@gogetagambles",
-    1964665140:"@joyboykingETH",
-    2181107335:"@spacemanalphas",
-    1597328515:"@KradsCalls",
-    2000078706:"@NIKOLA_CALLS", 
-    1601300719:"@piggiescall",
-    2051055592:"@Mrbigbagcalls",
-    1975392115:"@FrenzGems",
-    1671616196:"@veigargambles",
-    2219396784:"@Minion_Degen_Call",
-    1628177089:"explorer_gems",
-    2441888429:"BasedchadsGamble",
-    1915368269:"NFG_GAMBLES",
-    1294164024:"fortehculture",
-    2144494116:"GM_Degencalls",
-    2030684366:"uranusX100",
-    1903316574:"x666calls",
-    2350707840:"solanadaovolumealerts",
-    2534842510:"@AlphAI_signals_sol_en"
+    2234923591: {"name": "@Tanjirocall", "tag": "snipeKOL"},
+    1853203827: {"name": "@CryptoMafiaPlays", "tag": "snipeGEM"},
+    2121262250: {"name": "@DoctoreDegens", "tag": "TG_KOL"},
+    2010667852: {"name": "@SONIC_SPEED_CALLS", "tag": "TG_KOL"},
+    1975976600: {"name": "@smartmaxidegens", "tag": "EarlyGEM"},
+    2054466090: {"name": "@casgem", "tag": "TG_KOL"},
+    2055101998: {"name": "@metagambler", "tag": "TG_KOL"},
+    1500214409: {"name": "@GemsmineEth", "tag": "TG_KOL"},
+    1794471884: {"name": "@MineGems", "tag": "TG_KOL"},
+    1662909092: {"name": "@QuartzETH", "tag": "TG_KOL"},
+    1603469217: {"name": "@ZionGems", "tag": "TG_KOL"},
+    2366686880: {"name": "@Ranma_Calls_Solana", "tag": "snipeKOL"},
+    1510769567: {"name": "@BatmanGamble", "tag": "EarlyKOL"},
+    1818702441: {"name": "@michiosuzukiofsatoshicalls", "tag": "TG_KOL"},
+    1763265784: {"name": "@MarkDegens", "tag": "TG_KOL"},
+    1712900374: {"name": "@JeetyCall", "tag": "TG_KOL"},
+    1983450418: {"name": "@shitcoinneverland", "tag": "TG_KOL"},
+    2284638367: {"name": "@GemDynasty", "tag": "EarlyGEM"},
+    1554385364: {"name": "@SultanPlays", "tag": "EarlyKOL"},
+    1913209050: {"name": "@gigacalls", "tag": "TG_KOL"},
+    1869537526: {"name": "@POSEIDON_DEGEN_CALLS", "tag": "TG_KOL"},
+    1631609672: {"name": "@lowtaxcrypto", "tag": "TG_KOL"},
+    2276696688: {"name": "@CrikeyCallz", "tag": "TG_KOL"},
+    1851567457: {"name": "@Insider_ECA", "tag": "TG_KOL"},
+    1756488143: {"name": "@lowtaxsolana", "tag": "TG_KOL"},
+    1883929251: {"name": "@gogetagambles", "tag": "TG_KOL"},
+    1711812162: {"name": "@Chadleycalls", "tag": "TG_KOL"},
+    2181107335: {"name": "@spacemanalphas", "tag": "TG_KOL"},
+    2362597228: {"name": "@Parkergamblles", "tag": "EarlyKOL"},
+    2000078706: {"name": "@NIKOLA_CALLS", "tag": "TG_KOL"}, 
+    2696740432: {"name": "@cringemonke2", "tag": "SmartMoney"},
+    2051055592: {"name": "@Mrbigbagcalls", "tag": "TG_KOL"},
+    2299508637: {"name": "@BaddiesAi", "tag": "TG_KOL"},
+    1671616196: {"name": "@veigargambles", "tag": "TG_KOL"},
+    2219396784: {"name": "@Minion_Degen_Call", "tag": "TG_KOL"},
+    1628177089: {"name": "@explorer_gems", "tag": "TG_KOL"},
+    2441888429: {"name": "@BasedchadsGamble", "tag": "TG_KOL"},
+    1915368269: {"name": "@NFG_GAMBLES", "tag": "TG_KOL"},
+    2514471362: {"name": "@cringemonke", "tag": "Whale Bought"},
+    2144494116: {"name": "@GM_Degencalls", "tag": "TG_KOL"},
+    2030684366: {"name": "@uranusX100", "tag": "TG_KOL"},
+    1903316574: {"name": "@x666calls", "tag": "TG_KOL"},
+    2350707840: {"name": "@solanadaovolumealerts", "tag": "Volume alert"},
+    2534842510: {"name": "@AlphAI_signals_sol_en", "tag": "AlphAI_KOL"}
 }
 
 # Словарь для динамического хранения имен каналов
@@ -149,7 +162,10 @@ async def get_channel_name_async(client, chat_id):
     
     # Проверяем наш словарь каналов
     if stripped_id in SOURCE_CHANNELS:
-        return SOURCE_CHANNELS[stripped_id]
+        channel_info = SOURCE_CHANNELS[stripped_id]
+        if isinstance(channel_info, dict):
+            return channel_info["name"]
+        return channel_info
     
     # Пробуем получить из кэша
     if str_id in channel_names_cache:
@@ -180,14 +196,33 @@ def get_channel_name(chat_id):
         stripped_id = int(str(chat_id)[4:])  # Удаляем -100 из начала
     else:
         stripped_id = chat_id
-        
+    
     # Пытаемся найти в словаре
-    channel_name = SOURCE_CHANNELS.get(stripped_id)
-    if channel_name:
-        return channel_name
+    channel_info = SOURCE_CHANNELS.get(stripped_id)
+    if channel_info:
+        if isinstance(channel_info, dict):
+            return channel_info["name"]
+        return channel_info
     else:
         # Если не нашли, возвращаем общее обозначение
         return f"@channel_{abs(stripped_id)}"
+
+def get_channel_emojis_by_names(channel_names):
+    """Получает эмодзи каналов по их именам."""
+    emojis = ""
+    for name in channel_names:
+        # Ищем канал по имени
+        for chat_id, info in SOURCE_CHANNELS.items():
+            if isinstance(info, dict) and info["name"] == name:
+                tag = info["tag"]
+                emoji = TAG_EMOJI_MAP.get(tag, "🍀")  # Используем клевер по умолчанию
+                emojis += emoji
+                break
+            elif info == name:  # Для обратной совместимости
+                emojis += "🍀"  # Используем клевер по умолчанию
+                break
+    
+    return emojis
 
 # Функция поиска контрактов Solana
 def extract_solana_contracts(text):
@@ -231,6 +266,9 @@ def load_database():
             with open(TRACKER_DB_FILE, 'r', encoding='utf-8') as f:
                 tracker_db = json.load(f)
             logger.info(f"Загружено {len(tracker_db)} отслеживаемых токенов из базы данных")
+            
+            # Обновляем токены эмодзи, если это необходимо
+            update_tracker_with_emojis()
         else:
             logger.info("База данных отслеживаемых токенов не найдена, создаем новую")
             tracker_db = {}
@@ -238,6 +276,42 @@ def load_database():
         logger.error(f"Ошибка при загрузке базы данных: {e}")
         tokens_db = {}
         tracker_db = {}
+
+# Функция для добавления эмодзи к существующим токенам при загрузке базы данных
+def update_tracker_with_emojis():
+    """
+    Проверяет токены в базе трекера и добавляет поле 'emojis',
+    если его нет, на основе тегов каналов.
+    """
+    try:
+        updates_count = 0
+        for contract, data in tracker_db.items():
+            # Если поле emojis отсутствует, добавляем его
+            if 'emojis' not in data or not data['emojis']:
+                # Получаем эмодзи для каналов
+                emojis = get_channel_emojis_by_names(data.get('channels', []))
+                
+                # Добавляем эмодзи в данные трекера
+                tracker_db[contract]['emojis'] = emojis
+                updates_count += 1
+                logger.info(f"Добавлены эмодзи '{emojis}' для токена {contract}")
+                
+                # Обновляем channel_count, если он не соответствует
+                channels = data.get('channels', [])
+                if data.get('channel_count', 0) != len(channels):
+                    tracker_db[contract]['channel_count'] = len(channels)
+                    logger.info(f"Обновлен channel_count для токена {contract}: {len(channels)}")
+        
+        # Если были обновления, сохраняем базу данных
+        if updates_count > 0:
+            logger.info(f"Обновлено {updates_count} токенов с эмодзи")
+            save_tracker_database()
+            save_tracker_excel()
+    
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении эмодзи в базе трекера: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 # Функция сохранения базы данных
 def save_database():
@@ -274,6 +348,7 @@ def save_tracker_excel():
                 'signal_reached_time': data.get('signal_reached_time', ''),
                 'channel_count': data.get('channel_count', 0),
                 'channels': ', '.join(data.get('channels', [])),
+                'emojis': data.get('emojis', ''),  # Добавляем поле с эмодзи
             }
             
             # Добавляем времена обнаружения по каналам
@@ -291,7 +366,7 @@ def save_tracker_excel():
         logger.error(f"Ошибка при сохранении Excel базы данных отслеживаемых токенов: {e}")
 
 # Функция добавления токена в базу отслеживания
-def add_to_tracker(contract, token_data):
+def add_to_tracker(contract, token_data, emojis):
     """Добавляет токен, достигший MIN_SIGNALS, в базу отслеживания."""
     try:
         # Проверяем, есть ли уже этот токен в базе
@@ -306,12 +381,13 @@ def add_to_tracker(contract, token_data):
             'signal_reached_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'channel_count': token_data.get('channel_count', 0),
             'channels': token_data.get('channels', []),
-            'channel_times': token_data.get('channel_times', {})
+            'channel_times': token_data.get('channel_times', {}),
+            'emojis': emojis  # Добавляем эмодзи в трекер
         }
         
         # Добавляем в базу отслеживания
         tracker_db[contract] = tracker_data
-        logger.info(f"Токен {contract} добавлен в базу отслеживания")
+        logger.info(f"Токен {contract} добавлен в базу отслеживания с эмодзи: {emojis}")
         
         # Сохраняем базы данных
         save_tracker_database()
@@ -386,23 +462,26 @@ async def main():
                             
                             logger.info(f"Токен {contract} появился в новом канале. Всего каналов: {tokens_db[contract]['channel_count']}")
                             
-                            # Если токен набрал нужное количество каналов или больше, и сообщение еще не отправлялось
+                            # Если токен набрал нужное количество каналов или больше
                             if tokens_db[contract]["channel_count"] >= MIN_SIGNALS and not tokens_db[contract]["message_sent"]:
-                                # Отправляем только номер контракта
+                                # Получаем эмодзи для каналов, в которых был обнаружен контракт
+                                emojis = get_channel_emojis_by_names(tokens_db[contract]["channels"])
+                                
+                                # Отправляем номер контракта и эмодзи
                                 try:
-                                    await client.send_message(
+                                    sent_message = await client.send_message(
                                         TARGET_BOT,
-                                        f"Контракт: {contract}"
+                                        f"Контракт: {contract}\n{emojis}"
                                     )
                                     tokens_db[contract]["message_sent"] = True
-                                    logger.info(f"Номер контракта {contract} отправлен боту {TARGET_BOT}")
+                                    tokens_db[contract]["message_id"] = sent_message.id
+                                    tokens_db[contract]["emojis"] = emojis  # Сохраняем эмодзи в базе
+                                    logger.info(f"Номер контракта {contract} с эмодзи {emojis} отправлен боту {TARGET_BOT}, ID сообщения: {sent_message.id}")
                                     
                                     # Добавляем токен в базу отслеживания
-                                    add_to_tracker(contract, tokens_db[contract])
+                                    add_to_tracker(contract, tokens_db[contract], emojis)
                                 except Exception as e:
                                     logger.error(f"Ошибка при отправке номера контракта: {e}")
-                            else:
-                                logger.info(f"Токен {contract} обнаружен в {tokens_db[contract]['channel_count']} из {MIN_SIGNALS} необходимых каналов")
                             
                             # Сохраняем базу данных после обновления
                             save_database()
@@ -413,24 +492,35 @@ async def main():
                             "channel_times": {channel_name: current_time},
                             "channel_count": 1,
                             "first_seen": current_time,
-                            "message_sent": False
+                            "message_sent": False,
+                            "emojis": ""  # Добавляем поле для эмодзи
                         }
                         
                         logger.info(f"Новый токен {contract} добавлен. Обнаружен в 1 из {MIN_SIGNALS} необходимых каналов")
                         
                         # Проверяем, достаточно ли одного канала (если MIN_SIGNALS = 1)
                         if MIN_SIGNALS <= 1:
-                            # Отправляем только номер контракта
+                            # Получаем тег текущего канала
+                            channel_info = SOURCE_CHANNELS.get(event.chat_id)
+                            if isinstance(channel_info, dict) and "tag" in channel_info:
+                                tag = channel_info["tag"]
+                                emoji = TAG_EMOJI_MAP.get(tag, "🍀")  # Используем клевер по умолчанию
+                            else:
+                                emoji = "🍀"  # Используем клевер по умолчанию
+                            
+                            # Отправляем номер контракта с эмодзи
                             try:
-                                await client.send_message(
+                                sent_message = await client.send_message(
                                     TARGET_BOT,
-                                    f"Контракт: {contract}"
+                                    f"Контракт: {contract}\n{emoji}"
                                 )
                                 tokens_db[contract]["message_sent"] = True
-                                logger.info(f"Номер контракта {contract} отправлен боту {TARGET_BOT}")
+                                tokens_db[contract]["message_id"] = sent_message.id
+                                tokens_db[contract]["emojis"] = emoji  # Сохраняем эмодзи в базе
+                                logger.info(f"Номер контракта {contract} с эмодзи {emoji} отправлен боту {TARGET_BOT}, ID сообщения: {sent_message.id}")
                                 
                                 # Добавляем токен в базу отслеживания
-                                add_to_tracker(contract, tokens_db[contract])
+                                add_to_tracker(contract, tokens_db[contract], emoji)
                             except Exception as e:
                                 logger.error(f"Ошибка при отправке номера контракта: {e}")                        
                         # Сохраняем базу данных после добавления нового токена
@@ -442,71 +532,3 @@ async def main():
             logger.error(f"Ошибка при обработке сообщения: {e}")
             import traceback
             logger.error(traceback.format_exc())
-    
-    # Запускаем периодическое сохранение базы данных
-    async def periodic_save():
-        while True:
-            try:
-                await asyncio.sleep(300)  # Каждые 5 минут
-                save_database()
-            except Exception as e:
-                logger.error(f"Ошибка в задаче сохранения: {e}")
-                await asyncio.sleep(60)  # Подождем минуту перед следующей попыткой
-    
-    # Запускаем фоновую задачу сохранения
-    asyncio.ensure_future(periodic_save())
-    
-    logger.info(f"Бот запущен и отслеживает каналы: {len(SOURCE_CHANNELS)} шт. MIN_SIGNALS={MIN_SIGNALS}")
-    
-    # Держим соединение активным
-    try:
-        await client.run_until_disconnected()
-    except KeyboardInterrupt:
-        logger.info("Бот остановлен пользователем")
-    except Exception as e:
-        logger.error(f"Ошибка в основном цикле: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-    finally:
-        # Сохраняем базу данных перед выходом
-        save_database()
-        await client.disconnect()
-        logger.info("Соединение закрыто")
-
-# Обработчик сигнала прерывания
-def signal_handler(sig, frame):
-    logger.info("Получен сигнал прерывания, выполняется выход...")
-    save_database()  # Сохраняем базу данных перед выходом
-    sys.exit(0)
-
-if __name__ == "__main__":
-    try:
-        # Регистрируем обработчик прерывания
-        signal.signal(signal.SIGINT, signal_handler)
-        
-        # Решение проблемы с event loop в новых версиях Python
-        if sys.version_info >= (3, 10):
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        
-        # Запускаем бота с возможностью перезапуска
-        while True:
-            try:
-                # Используем новый event loop для каждого запуска
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(main())
-                break  # Выход из цикла при нормальном завершении
-            except KeyboardInterrupt:
-                logger.info("Бот остановлен пользователем")
-                save_database()
-                break
-            except Exception as e:
-                logger.error(f"Критическая ошибка, перезапуск через 10 секунд: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-                save_database()
-                time.sleep(10)  # Ждем 10 секунд перед перезапуском
-    except Exception as e:
-        print(f"Критическая ошибка при запуске: {e}")
-        import traceback
-        print(traceback.format_exc())
