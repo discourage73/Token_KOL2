@@ -31,13 +31,3 @@ SOURCE_BOTS = [
 
 # Целевой канал для пересылки из ботов
 TARGET_CHANNEL = "cringemonke"  # без символа @ в начале
-
-# Источники новостей (каналы)
-NEWS_CHANNELS = [
-    "cointelegraph",  # без символа @ в начале
-    "coindesk",       # без символа @ в начале
-    "WatcherGuru"     # без символа @ в начале
-]
-
-# Целевой канал для пересылки новостей
-NEWS_TARGET_CHANNEL = "MoonCryptoMonkey"  # без символа @ в начале

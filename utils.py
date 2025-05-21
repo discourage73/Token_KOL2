@@ -154,7 +154,11 @@ def process_token_data(token_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def format_message(token_info: Dict[str, Any], initial_data: Optional[Dict[str, Any]] = None) -> str:
     """Форматирует сообщение с информацией о токене."""
-    message = f"🪙 *Тикер*: {token_info['ticker']}\n"
+    # Создаем ссылку на поиск адреса в Twitter/X.com
+    ticker_address = token_info.get('ticker_address', '')
+    twitter_search_link = f"https://twitter.com/search?q={ticker_address}"
+    
+    message = f"🪙 *Тикер*: {token_info['ticker']} [Xca]({twitter_search_link})\n"
     message += f"📝 *Адрес*: `{token_info['ticker_address']}`\n\n"
     
     message += f"💰 *Market Cap*: {token_info['market_cap']}\n"

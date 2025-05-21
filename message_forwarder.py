@@ -21,8 +21,7 @@ if sys.platform == 'win32':
 
 # Импортируем конфигурацию
 try:
-    from config import (API_ID, API_HASH, SOURCE_BOTS, TARGET_CHANNEL, 
-                      NEWS_CHANNELS, NEWS_TARGET_CHANNEL, logger)
+    from config import (API_ID, API_HASH, SOURCE_BOTS, TARGET_CHANNEL, logger)
     # Используем логгер из config.py
     USING_CONFIG_LOGGER = True
 except ImportError:
@@ -31,8 +30,6 @@ except ImportError:
     API_HASH = "458e1315175e0103f19d925204b690a5"
     SOURCE_BOTS = ["TheMobyBot", "ray_cyan_bot"]
     TARGET_CHANNEL = "cringemonke"
-    NEWS_CHANNELS = ["cointelegraph", "coindesk", "WatcherGuru"]
-    NEWS_TARGET_CHANNEL = "MoonCryptoMonkey"
     
     USING_CONFIG_LOGGER = False
     # Создаем директорию для логов, если она не существует
@@ -59,10 +56,11 @@ except ImportError:
 # Глобальная переменная для отслеживания статуса работы
 is_running = True
 
+
 async def extract_and_format_ray_cyan_data(message):
     """
     Извлекает и форматирует ключевую информацию из сообщений ray_cyan_bot.
-    Возвращает отформатированный текст с только необходимой информацией.
+    Возвращает отформатированный текст с полным адресом кошелька.
     """
     if not hasattr(message, 'text') or not message.text:
         return None
@@ -71,108 +69,130 @@ async def extract_and_format_ray_cyan_data(message):
     
     # Проверяем, что это сообщение о покупке токена
     if "BUY" not in text:
-        # Если это не сообщение о покупке, возвращаем None, чтобы использовалась стандартная обработка
+        # Если это не сообщение о покупке, возвращаем None
         return None
     
     try:
-        # Извлекаем название токена
+        # Извлекаем название токена (без скобки)
         buy_match = re.search(r'BUY ([^\s\(\)]+)', text)
         token_name = buy_match.group(1) if buy_match else "UNKNOWN"
         
-        # ИСПРАВЛЕНИЕ: Правильно извлекаем платформу
-        # Вначале ищем в строке вида "BUY TOKEN on PLATFORM"
-        platform_match = re.search(r'BUY [^\s\(\)]+ on ([A-Z\s]+)', text)
-        platform = platform_match.group(1).strip() if platform_match else ""
+        # Убедимся, что в токене нет закрывающей скобки
+        if token_name.endswith("]"):
+            token_name = token_name[:-1]
         
-        # Если не нашли или платформа является точно PumpSwap/PUMP FUN, то оставляем пустой строкой 
-        # (по требованию: "можно вообще удалить и не писать")
-        if not platform or platform == "PumpSwap" or platform == "PUMP FUN":
-            platform = ""
-        else:
-            platform = f" on {platform}"
+        # Извлекаем полный адрес кошелька
+        full_wallet = None
         
-        # Извлекаем процент и числа
-        percent_match = re.search(r'([0-9.]+%) ([0-9,]+)/([0-9,]+)', text)
-        percent = percent_match.group(1) if percent_match else ""
-        numbers = f"{percent_match.group(2)}/{percent_match.group(3)}" if percent_match else ""
+        # Ищем в ссылках solscan
+        solscan_match = re.search(r'https://solscan.io/account/([a-zA-Z0-9]{32,})', text)
         
-        # Извлекаем информацию о свопе SOL
-        swap_match = re.search(r'swapped\s+([0-9.]+)\s+SOL', text)
-        sol_amount = swap_match.group(1) if swap_match else ""
+        if solscan_match:
+            full_wallet = solscan_match.group(1)
+            logger.info(f"Найден полный адрес кошелька из URL solscan: {full_wallet}")
         
-        # Если не нашли в первом регулярном выражении, ищем другой формат
-        if not sol_amount:
-            alt_swap_match = re.search(r'([0-9.]+)\s*SOL for', text)
-            sol_amount = alt_swap_match.group(1) if alt_swap_match else ""
-        
-        # Извлекаем Market Cap (MC)
-        mc_match = re.search(r'MC:?\s*(\$[0-9.]+[KMB]?)', text)
-        mc_value = mc_match.group(1) if mc_match else ""
-        
-        # Извлекаем информацию о времени (Seen)
-        seen_match = re.search(r'Seen:?\s*([0-9]+[mhd][:\s]*[0-9]*[mhd]?)', text)
-        seen_value = seen_match.group(1) if seen_match else ""
-        
-        # ИСПРАВЛЕНИЕ: Лучший способ извлечь адрес контракта
-        # 1. Сначала ищем адрес в последней строке, где только буквы и цифры
-        lines = text.split('\n')
-        address = ""
-        
-        # Ищем в обратном порядке (снизу вверх)
-        for line in reversed(lines):
-            line = line.strip()
-            # Проверяем, что строка содержит только буквы и цифры и имеет нужную длину
-            if re.match(r"^[A-Za-z0-9]{32,44}$", line):
-                address = line
-                break
-        
-        # 2. Если не нашли в отдельной строке, ищем любой подходящий адрес в тексте
-        if not address:
-            # Общий поиск адреса в любой части текста
-            addr_matches = re.findall(r'[A-Za-z0-9]{32,44}', text)
-            if addr_matches:
-                # Берем последний найденный адрес (обычно самый релевантный)
-                address = addr_matches[-1]
-        
-        # 3. Если всё еще не нашли, пробуем специфичные для PumpFun форматы
-        if not address:
-            # Ищем адреса в формате токенов с "pump" в конце
-            pump_addr_match = re.search(r'([A-Za-z0-9]{6,}[A-Za-z0-9]*pump)["\s\)]', text)
-            address = pump_addr_match.group(1) if pump_addr_match else ""
+        # Если не нашли в URL, ищем строки, которые могут быть кошельками
+        if not full_wallet:
+            # Ищем строки с "swapped"
+            swap_lines = [line for line in text.split('\n') if "swapped" in line]
             
-            # Если не нашли по шаблону выше, ищем в URL ссылках
-            if not address:
-                addr_url_match = re.search(r'/token/([A-Za-z0-9]{6,}[A-Za-z0-9]*pump)', text)
-                address = addr_url_match.group(1) if addr_url_match else ""
+            if swap_lines:
+                for line in swap_lines:
+                    # Ищем кошелек в начале строки с "swapped"
+                    swap_match = re.search(r'^(\s*[a-zA-Z0-9]+\S+)\s+swapped', line)
+                    
+                    if swap_match:
+                        # Извлекаем полное имя перед "swapped"
+                        wallet_prefix = swap_match.group(1).strip()
+                        
+                        # Ищем полный адрес, соответствующий этому префиксу
+                        for potential_addr in re.findall(r'[a-zA-Z0-9]{40,}', text):
+                            if potential_addr.startswith(wallet_prefix[:5]):
+                                full_wallet = potential_addr
+                                break
+            
+            # Если все еще не нашли, ищем любую достаточно длинную строку, которая выглядит как кошелек
+            if not full_wallet:
+                # Ищем в строках текста
+                for line in text.split('\n'):
+                    wallet_matches = re.findall(r'([a-zA-Z0-9]{40,})', line)
+                    
+                    for wallet in wallet_matches:
+                        # Проверяем, что это не похоже на контракт (не последняя строка)
+                        if wallet and line != text.split('\n')[-1]:
+                            full_wallet = wallet
+                            break
         
-        # Логируем найденный адрес для отладки - ИСПРАВЛЕНО
-        logger.info("Извлеченный адрес контракта: {}".format(address))
+        # Если все еще не нашли, ищем длинные строки перед строками с метаданными
+        if not full_wallet:
+            # Ищем строки с метаданными, которые обычно в конце
+            metadata_patterns = [r'#\w+ \|', r'MC:', r'Seen:']
+            
+            for i, line in enumerate(text.split('\n')):
+                if any(re.search(pattern, line) for pattern in metadata_patterns):
+                    # Ищем кошелек в предыдущих строках
+                    for prev_line in text.split('\n')[:i]:
+                        wallet_matches = re.findall(r'([a-zA-Z0-9]{40,})', prev_line)
+                        
+                        if wallet_matches:
+                            full_wallet = wallet_matches[0]
+                            break
         
-        # Проверяем, удалось ли извлечь адрес
-        if not address:
-            logger.warning("Не удалось извлечь адрес контракта из сообщения")
+        # Извлекаем адрес контракта 
+        # Это обычно длинная строка в последней строке или рядом с метаданными
+        contract_address = ""
         
-        # Формируем дополнительную информацию
-        additional_info = ""
-        if mc_value:
-            additional_info += f" | MC: {mc_value}"
-        if seen_value:
-            additional_info += f" | Seen: {seen_value}"
+        # Проверяем последнюю строку на наличие контракта
+        lines = text.split('\n')
         
-        # Форматируем сообщение согласно требованиям
-        formatted_text = f"""🟢 BUY {token_name}{platform}
-
-🔹 {percent} {numbers} swapped {sol_amount} SOL{additional_info}
-
-{address}"""
-
+        if lines and lines[-1].strip():
+            last_line = lines[-1].strip()
+            
+            if re.match(r'^[a-zA-Z0-9]{30,}$', last_line) and (not full_wallet or full_wallet != last_line):
+                contract_address = last_line
+                logger.info(f"Найден адрес контракта в последней строке: {contract_address}")
+        
+        # Если не нашли в последней строке, ищем рядом с метаданными
+        if not contract_address:
+            # Ищем строки с метаданными
+            for i, line in enumerate(lines):
+                if re.search(r'#\w+ \|', line) or re.search(r'MC:', line) or re.search(r'Seen:', line):
+                    # Проверяем предыдущую строку
+                    if i > 0 and re.match(r'^[a-zA-Z0-9]{30,}$', lines[i-1].strip()):
+                        contract_address = lines[i-1].strip()
+                        break
+        
+        # Если все еще не нашли, ищем в любом месте текста длинную строку, 
+        # которая не совпадает с кошельком
+        if not contract_address:
+            for line in text.split('\n'):
+                contract_matches = re.findall(r'([a-zA-Z0-9]{30,})', line)
+                
+                for contract in contract_matches:
+                    if contract and (not full_wallet or full_wallet != contract):
+                        contract_address = contract
+                        break
+        
+        # Форматируем сообщение по требуемому шаблону с пробелами и построчным разделением
+        formatted_text = f"""🟢 BUY {token_name}"""
+        
+        # Добавляем строку с кошельком, если нашли
+        if full_wallet:
+            formatted_text += f"\nSmart money : {full_wallet}"
+        
+        # Добавляем адрес контракта, если нашли
+        if contract_address:
+            formatted_text += f"\n{contract_address}"
+        
+        # Для отладки показываем, что мы нашли
+        logger.info(f"Найдено - Токен: {token_name}, Кошелек: {full_wallet}, Контракт: {contract_address}")
+        
         return formatted_text
     except Exception as e:
-        logger.error("Ошибка при извлечении данных из сообщения ray_cyan_bot: {}".format(e))
+        logger.error(f"Ошибка при извлечении данных из сообщения ray_cyan_bot: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return None
-
 
 async def extract_and_format_whale_alerts(message):
     """
@@ -251,14 +271,6 @@ async def start_forwarding():
             f"🔄 Сервис пересылки сообщений запущен и отслеживает бота: @ray_cyan_bot"
         )
         logger.info("Приветственное сообщение отправлено в канал @cringemonke2")
-        
-        # Отправляем в канал для новостей
-        news_channels_list = ", ".join([f"@{channel}" for channel in NEWS_CHANNELS])
-        await client.send_message(
-            NEWS_TARGET_CHANNEL, 
-            f"🔄 Сервис пересылки новостей запущен и отслеживает каналы: {news_channels_list}"
-        )
-        logger.info("Приветственное сообщение отправлено в канал @{}".format(NEWS_TARGET_CHANNEL))
     except Exception as e:
         logger.error("Ошибка при отправке приветственного сообщения: {}".format(e))
     
@@ -322,20 +334,6 @@ async def start_forwarding():
                         logger.error("Ошибка при пересылке сообщения от ray_cyan_bot: {}".format(e))
                         import traceback
                         logger.error(traceback.format_exc())
-            
-            # Пересылка из новостных каналов
-            elif sender_username in NEWS_CHANNELS:
-                logger.info("Получено сообщение от новостного канала @{}".format(sender_username))
-                
-                # Пересылаем текст в канал для новостей
-                if hasattr(event.message, 'text') and event.message.text:
-                    try:
-                        await client.send_message(NEWS_TARGET_CHANNEL, event.message.text)
-                        logger.info("Новость от @{} переслана в @{}".format(sender_username, NEWS_TARGET_CHANNEL))
-                    except Exception as e:
-                        logger.error("Ошибка при пересылке новости: {}".format(e))
-                        import traceback
-                        logger.error(traceback.format_exc())
         except Exception as e:
             logger.error("Ошибка при обработке сообщения: {}".format(e))
             import traceback
@@ -343,7 +341,7 @@ async def start_forwarding():
     
     # Держим соединение активным до получения сигнала остановки
     try:
-        logger.info("Ожидание сообщений от ботов и каналов...")
+        logger.info("Ожидание сообщений от ботов...")
         while is_running:
             await asyncio.sleep(60)
             logger.info("Сервис активен, ожидание сообщений...")

@@ -423,7 +423,8 @@ async def clear_tokens(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             [InlineKeyboardButton("🔍 Выборочное удаление", callback_data="delete_selective")],
             [InlineKeyboardButton("🙈 Скрыть все", callback_data="clear_all_confirm")],
             [InlineKeyboardButton("📋 Выборочное скрытие", callback_data="clear_selective")],
-            [InlineKeyboardButton("🕵️ Управление скрытыми", callback_data="manage_hidden")],
+            [InlineKeyboardButton("👁 Отобразить все", callback_data="unhide_all")],
+            [InlineKeyboardButton("🔎 Выборочное отображение", callback_data="manage_hidden")],
             [InlineKeyboardButton("❌ Отмена", callback_data="clear_cancel")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -439,7 +440,8 @@ async def clear_tokens(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "🔍 *Выборочное удаление* - позволит выбрать токены для удаления.\n"
             "🙈 *Скрыть все* - скроет все токены (они останутся в базе).\n"
             "📋 *Выборочное скрытие* - позволит выбрать токены для скрытия.\n"
-            "🕵️ *Управление скрытыми* - управление скрытыми токенами.\n"
+            "👁 *Отобразить все* - отобразит все скрытые токены.\n"
+            "🔎 *Выборочное отображение* - управление скрытыми токенами.\n"
             "❌ *Отмена* - отменить операцию.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=reply_markup
@@ -834,7 +836,8 @@ async def handle_clear_return(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("🔍 Выборочное удаление", callback_data="delete_selective")],
             [InlineKeyboardButton("🙈 Скрыть все", callback_data="clear_all_confirm")],
             [InlineKeyboardButton("📋 Выборочное скрытие", callback_data="clear_selective")],
-            [InlineKeyboardButton("🕵️ Управление скрытыми", callback_data="manage_hidden")],
+            [InlineKeyboardButton("👁 Отобразить все", callback_data="unhide_all")],
+            [InlineKeyboardButton("🔎 Выборочное отображение", callback_data="manage_hidden")],
             [InlineKeyboardButton("❌ Отмена", callback_data="clear_cancel")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -850,7 +853,8 @@ async def handle_clear_return(update: Update, context: ContextTypes.DEFAULT_TYPE
             "🔍 *Выборочное удаление* - позволит выбрать токены для удаления.\n"
             "🙈 *Скрыть все* - скроет все токены (они останутся в базе).\n"
             "📋 *Выборочное скрытие* - позволит выбрать токены для скрытия.\n"
-            "🕵️ *Управление скрытыми* - управление скрытыми токенами.\n"
+            "👁 *Отобразить все* - отобразит все скрытые токены.\n"
+            "🔎 *Выборочное отображение* - управление скрытыми токенами.\n"
             "❌ *Отмена* - отменить операцию.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=reply_markup
@@ -1083,16 +1087,102 @@ async def handle_delete_token(update: Update, context: ContextTypes.DEFAULT_TYPE
         except:
             pass
 
+async def handle_unhide_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает запрос на отображение всех скрытых токенов."""
+    query = update.callback_query
+    
+    try:
+        # Получаем число скрытых токенов
+        hidden_tokens = token_storage.get_hidden_tokens()
+        hidden_count = len(hidden_tokens)
+        
+        if hidden_count == 0:
+            await query.edit_message_text(
+                "Нет скрытых токенов для отображения.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            await query.answer("Нет скрытых токенов")
+            return
+        
+        # Создаем кнопки для подтверждения
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Да, отобразить все", callback_data="unhide_all_confirm"),
+                InlineKeyboardButton("❌ Отмена", callback_data="clear_cancel")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Обновляем сообщение с запросом подтверждения
+        await query.edit_message_text(
+            f"Вы уверены, что хотите отобразить *все* скрытые токены? ({hidden_count} шт.)\n\n"
+            "Они станут видны в общем списке токенов.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
+        )
+        
+        await query.answer()
+        debug_logger.info(f"Запрос подтверждения отображения всех скрытых токенов ({hidden_count} шт.)")
+    except Exception as e:
+        debug_logger.error(f"Ошибка при запросе подтверждения отображения: {str(e)}")
+        debug_logger.error(traceback.format_exc())
+        try:
+            await query.answer("Произошла ошибка. Пожалуйста, попробуйте позже.")
+        except:
+            pass
+
+async def handle_unhide_all_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает подтверждение отображения всех скрытых токенов."""
+    query = update.callback_query
+    
+    try:
+        # Логируем действие
+        debug_logger.info("Подтверждено отображение всех скрытых токенов")
+        
+        # Получаем скрытые токены
+        hidden_tokens = token_storage.get_hidden_tokens()
+        hidden_count = len(hidden_tokens)
+        
+        if hidden_count == 0:
+            await query.edit_message_text(
+                "Нет скрытых токенов для отображения.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            await query.answer("Нет скрытых токенов")
+            return
+        
+        # Отображаем все скрытые токены
+        for token_query in hidden_tokens.keys():
+            token_storage.unhide_token(token_query)
+        
+        # Обновляем сообщение
+        await query.edit_message_text(
+            f"✅ *Все скрытые токены отображены ({hidden_count} шт.)*\n\n"
+            "Теперь они будут видны в общем списке.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
+        await query.answer("Токены успешно отображены")
+        debug_logger.info(f"Отображены все скрытые токены ({hidden_count} шт.)")
+    except Exception as e:
+        debug_logger.error(f"Ошибка при отображении всех токенов: {str(e)}")
+        debug_logger.error(traceback.format_exc())
+        try:
+            await query.answer("Произошла ошибка при отображении токенов.")
+        except:
+            pass
+
 async def setup_bot_commands(application) -> None:
     """Устанавливает список команд бота с описаниями."""
     try:
-        # Добавляем команду excel
+        # Добавляем команды
         commands = [
             BotCommand("start", "запустить бота"),
             BotCommand("help", "показать справку"),
             BotCommand("list", "показать список отслеживаемых токенов"),
             BotCommand("excel", "сформировать Excel-файл со всеми данными"),
-            BotCommand("clear", "удалить/управлять токенами")
+            BotCommand("clear", "удалить/управлять токенами"),
+            BotCommand("stats", "показать статистику токенов за 12 часов")
         ]
         
         await application.bot.set_my_commands(commands)
@@ -1106,13 +1196,14 @@ def setup_commands_direct(token):
     try:
         import requests
         
-        # Добавляем команду excel
+        # Добавляем команды
         commands = [
             {"command": "start", "description": "запустить бота"},
             {"command": "help", "description": "показать справку"},
             {"command": "list", "description": "показать список отслеживаемых токенов"},
             {"command": "excel", "description": "сформировать Excel-файл со всеми данными"},
-            {"command": "clear", "description": "удалить/управлять токенами"}
+            {"command": "clear", "description": "удалить/управлять токенами"},
+            {"command": "stats", "description": "показать статистику токенов за 12 часов"}
         ]
         
         url = f"https://api.telegram.org/bot{token}/setMyCommands"

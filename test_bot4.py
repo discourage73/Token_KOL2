@@ -163,7 +163,7 @@ async def get_token_info(
                 # Обрабатываем основной DEX
                 if popular_dex:
                     token_info['dex_info'] = popular_dex.get('dexId', 'Unknown DEX')
-                    token_info['txns_trend'] = analyze_transactions(popular_dex.get('txns', {}))
+                    #token_info['txns_trend'] = analyze_transactions(popular_dex.get('txns', {}))
                 
                 # Добавляем информацию о PUMPFUN, если найден
                 if pumpfun_dex:
@@ -289,6 +289,8 @@ def find_dexes_info(dex_data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str,
         debug_logger.error(traceback.format_exc())
         return None, None
 
+# Удаляем функцию analyze_transactions полностью
+
 async def get_token_info(
     query: str, 
     chat_id: int, 
@@ -327,15 +329,7 @@ async def get_token_info(
         
         # По умолчанию устанавливаем значения
         token_info['dex_info'] = 'Unknown DEX'
-        token_info['txns_trend'] = {
-            "m5_buys": 0,
-            "m5_sells": 0,
-            "h1_buys": 0,
-            "h1_sells": 0,
-            "h24_buys": 0,
-            "h24_sells": 0,
-            "status": "🟡 Нейтральный тренд"
-        }
+        # Убираем txns_trend, так как анализ транзакций удален
         
         # Запрашиваем данные напрямую с API для получения данных о всех DEX
         try:
@@ -357,12 +351,12 @@ async def get_token_info(
                     
                     # Считаем общее количество транзакций за 24 часа
                     h24_data = txns.get('h24', {})
-                    h24_buys = h24_data.get('buys', 0)
-                    h24_sells = h24_data.get('sells', 0)
+                    h24_buys = h24_data.get('buys', 0) if isinstance(h24_data, dict) else 0
+                    h24_sells = h24_data.get('sells', 0) if isinstance(h24_data, dict) else 0
                     total_txns = h24_buys + h24_sells
                     
                     # Проверяем, не PUMPFUN ли это
-                    if dex_id.lower() == 'pumpfun':
+                    if dex_id.lower() in ['pumpfun', 'pump.fun', 'pump fun']:
                         pumpfun_dex = pair
                     
                     # Проверяем, не самый ли это популярный DEX
@@ -377,7 +371,7 @@ async def get_token_info(
                 # Обрабатываем основной DEX
                 if popular_dex:
                     token_info['dex_info'] = popular_dex.get('dexId', 'Unknown DEX')
-                    token_info['txns_trend'] = analyze_transactions(popular_dex.get('txns', {}))
+                    # Убираем вызов analyze_transactions здесь
                 
                 # Добавляем информацию о PUMPFUN, если найден
                 if pumpfun_dex:
@@ -441,92 +435,16 @@ async def get_token_info(
         logger.error(f"Ошибка в get_token_info: {str(e)}")
         return None
 
-def analyze_transactions(txns: Dict[str, Any]) -> Dict[str, Any]:
-    """Анализирует данные о транзакциях и определяет тенденцию."""
-    try:
-        # Убеждаемся, что txns не None
-        if not txns:
-            debug_logger.warning("Переданы пустые данные о транзакциях")
-            return {
-                "m5_buys": 0,
-                "m5_sells": 0,
-                "h1_buys": 0,
-                "h1_sells": 0,
-                "h24_buys": 0,
-                "h24_sells": 0,
-                "status": "🟡 Нейтральный тренд"
-            }
-            
-        debug_logger.info(f"Анализ транзакций: {txns}")
-        
-        # Извлекаем данные о транзакциях
-        m5 = txns.get('m5', {})
-        h1 = txns.get('h1', {})
-        h24 = txns.get('h24', {})
-        
-        # Проверка типов данных
-        debug_logger.info(f"Тип данных m5: {type(m5)}, h1: {type(h1)}, h24: {type(h24)}")
-        
-        # Получаем количество покупок и продаж с безопасной проверкой типов
-        m5_buys = m5.get('buys', 0) if isinstance(m5, dict) else 0
-        m5_sells = m5.get('sells', 0) if isinstance(m5, dict) else 0
-        h1_buys = h1.get('buys', 0) if isinstance(h1, dict) else 0
-        h1_sells = h1.get('sells', 0) if isinstance(h1, dict) else 0
-        h24_buys = h24.get('buys', 0) if isinstance(h24, dict) else 0
-        h24_sells = h24.get('sells', 0) if isinstance(h24, dict) else 0
-        
-        debug_logger.info(f"Данные о транзакциях: m5={m5_buys}/{m5_sells}, h1={h1_buys}/{h1_sells}, h24={h24_buys}/{h24_sells}")
-        
-        # Определяем соотношение покупок к продажам, избегая деления на ноль
-        m5_ratio = m5_buys / max(m5_sells, 0.001) if m5_sells > 0 else 0 if m5_buys == 0 else float('inf')
-        h1_ratio = h1_buys / max(h1_sells, 0.001) if h1_sells > 0 else 0 if h1_buys == 0 else float('inf')
-        h24_ratio = h24_buys / max(h24_sells, 0.001) if h24_sells > 0 else 0 if h24_buys == 0 else float('inf')
-        
-        debug_logger.info(f"Соотношения: m5={m5_ratio}, h1={h1_ratio}, h24={h24_ratio}")
-        
-        # Определяем статус тренда
-        if h1_ratio > 1.5 and h24_ratio > 1.3:
-            status = "🟢 Сильный бычий тренд"
-        elif h1_ratio > 1.2 and h24_ratio > 1.1:
-            status = "🟢 Бычий тренд"
-        elif h1_ratio < 0.7 and h24_ratio < 0.8:
-            status = "🔴 Медвежий тренд"
-        elif h1_ratio < 0.5 and h24_ratio < 0.7:
-            status = "🔴 Сильный медвежий тренд"
-        else:
-            status = "🟡 Нейтральный тренд"
-        
-        debug_logger.info(f"Определен статус тренда: {status}")
-        
-        return {
-            "m5_buys": m5_buys,
-            "m5_sells": m5_sells,
-            "h1_buys": h1_buys,
-            "h1_sells": h1_sells,
-            "h24_buys": h24_buys,
-            "h24_sells": h24_sells,
-            "status": status
-        }
-    except Exception as e:
-        debug_logger.error(f"Ошибка в analyze_transactions: {str(e)}")
-        debug_logger.error(traceback.format_exc())
-        # Возвращаем безопасные значения в случае ошибки
-        return {
-            "m5_buys": 0,
-            "m5_sells": 0,
-            "h1_buys": 0,
-            "h1_sells": 0,
-            "h24_buys": 0,
-            "h24_sells": 0,
-            "status": "🟡 Нейтральный тренд"
-        }
-
 def format_enhanced_message(token_info: Dict[str, Any], initial_data: Optional[Dict[str, Any]] = None) -> str:
     """Форматирует расширенное сообщение с дополнительной информацией о токене."""
     try:
         debug_logger.info(f"Форматирование сообщения для токена: {token_info.get('ticker', 'Неизвестно')}")
         
-        message = f"🪙 *Тикер*: {token_info.get('ticker', 'Неизвестно')}\n"
+        # Создаем ссылку на поиск адреса в Twitter/X.com
+        ticker_address = token_info.get('ticker_address', '')
+        twitter_search_link = f"https://twitter.com/search?q={ticker_address}"
+        
+        message = f"🪙 *Тикер*: {token_info.get('ticker', 'Неизвестно')} [Xca]({twitter_search_link})\n"
         message += f"📝 *Адрес*: `{token_info.get('ticker_address', 'Неизвестно')}`\n\n"
         
         # Блок с ссылками на сайты (перемещен вверх)
@@ -581,37 +499,32 @@ def format_enhanced_message(token_info: Dict[str, Any], initial_data: Optional[D
         if volumes_block:
             message += volumes_block + "\n"
         
+        # Получаем адрес токена для ссылок
+        ticker_address = token_info.get('ticker_address', '')
+        pair_address = token_info.get('pair_address', '')
+        
+        # Создаем ссылку на GMGN
+        gmgn_link = f"https://gmgn.ai/sol/token/{ticker_address}"
+        
         # Блок с ссылками на торговые площадки
-        message += f"🔎 *Ссылки*: [DexScreener]({token_info.get('dexscreener_link', '#')}) | [Axiom Trade]({token_info.get('axiom_link', '#')})\n\n"
+        message += f"🔎 *Ссылки*: [DexScreener]({token_info.get('dexscreener_link', '#')}) | [Axiom Trade]({token_info.get('axiom_link', '#')}) | [GMGN]({gmgn_link})\n\n"
         
-        # Добавляем информацию о DEX
-        if 'dex_info' in token_info and 'txns_trend' in token_info:
-            dex_name = token_info['dex_info'].upper()
-            message += f"DEX: {dex_name}\n"
-            message += f"🧮 *Анализ транзакций*:\n"
-            txns_trend = token_info['txns_trend']
-            message += f"Соотношение покупок/продаж (5м): {txns_trend.get('m5_buys', 0)}/{txns_trend.get('m5_sells', 0)}\n"
-            message += f"Соотношение покупок/продаж (1ч): {txns_trend.get('h1_buys', 0)}/{txns_trend.get('h1_sells', 0)}\n"
-            message += f"Соотношение покупок/продаж (24ч): {txns_trend.get('h24_buys', 0)}/{txns_trend.get('h24_sells', 0)}\n"
-            message += f"Статус: {txns_trend.get('status', '🟡 Нейтральный тренд')}\n\n"
-            debug_logger.info(f"Добавлена информация о DEX: {dex_name}")
-        
-        # Добавляем информацию о PUMPFUN, если она доступна
-        if 'pumpfun_data' in token_info:
-            pumpfun_data = token_info['pumpfun_data']
-            txns = pumpfun_data.get('txns', {})
-            message += f"DEX: *PUMPFUN*\n\n"
-            message += f"Соотношение покупок/продаж (5м): {txns.get('m5', {}).get('buys', 0)}/{txns.get('m5', {}).get('sells', 0)}\n"
-            message += f"Соотношение покупок/продаж (1ч): {txns.get('h1', {}).get('buys', 0)}/{txns.get('h1', {}).get('sells', 0)}\n"
-            message += f"Соотношение покупок/продаж (24ч): {txns.get('h24', {}).get('buys', 0)}/{txns.get('h24', {}).get('sells', 0)}\n"
-            
-            # Добавляем информацию о бустах, если есть
-            boosts = pumpfun_data.get('boosts')
-            if boosts:
-                message += f"\nАктивация бустов: {boosts}\n\n"
-            else:
-                message += "\n"
-            debug_logger.info("Добавлена информация о PUMPFUN")
+        # УДАЛЯЕМ БЛОК С ИНФОРМАЦИЕЙ О DEX - эти строки нужно удалить или закомментировать
+        # # Добавляем информацию о DEX без анализа транзакций
+        # if 'dex_info' in token_info:
+        #     dex_name = token_info['dex_info'].upper()
+        #     message += f"DEX: {dex_name}\n\n"
+        #     debug_logger.info(f"Добавлена информация о DEX: {dex_name}")
+        # 
+        # # Добавляем информацию о PUMPFUN, если она доступна (только без анализа)
+        # if 'pumpfun_data' in token_info:
+        #     message += f"DEX: *PUMPFUN*\n\n"
+        #     
+        #     # Добавляем информацию о бустах, если есть
+        #     boosts = token_info['pumpfun_data'].get('boosts')
+        #     if boosts:
+        #         message += f"Активация бустов: {boosts}\n\n"
+        #     debug_logger.info("Добавлена информация о PUMPFUN")
         
         # Добавляем метку времени и исходные данные
         current_time = datetime.datetime.now().strftime("%H:%M:%S")
@@ -804,6 +717,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_manage_hidden(update, context)
         elif data.startswith("unhide_token:"):
             await handle_unhide_token(update, context)
+        # Новые обработчики для отображения всех токенов
+        elif data == "unhide_all":
+            await handle_unhide_all(update, context)
+        elif data == "unhide_all_confirm":
+            await handle_unhide_all_confirm(update, context)
         # Обработчики для полного удаления токенов
         elif data == "delete_all_confirm":
             await handle_delete_all_confirm(update, context)
@@ -1027,6 +945,41 @@ async def on_startup(application):
         debug_logger.error(f"Ошибка при инициализации бота: {str(e)}")
         debug_logger.error(traceback.format_exc())
 
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отображает статистику по токенам за последние 12 часов."""
+    try:
+        debug_logger.info("Запрошена статистика по токенам")
+        
+        # Отправляем сообщение о начале формирования статистики
+        wait_message = await update.message.reply_text(
+            "Формирую статистику по токенам за последние 12 часов...",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
+        # Импортируем функцию для отправки статистики
+        from token_service import send_token_stats
+        
+        # Вызываем функцию для отправки статистики
+        await send_token_stats(context)
+        
+        # Удаляем сообщение об ожидании
+        try:
+            await wait_message.delete()
+        except Exception as e:
+            debug_logger.error(f"Ошибка при удалении сообщения об ожидании: {e}")
+        
+        debug_logger.info("Статистика по токенам успешно отправлена")
+        
+    except Exception as e:
+        debug_logger.error(f"Ошибка при формировании статистики: {str(e)}")
+        debug_logger.error(traceback.format_exc())
+        try:
+            await update.message.reply_text(
+                "Произошла ошибка при формировании статистики. Пожалуйста, попробуйте позже."
+            )
+        except Exception:
+            pass
+
 def configure_root_logger():
     """Настраивает корневой логгер для управления всеми модулями."""
     # Настройка корневого логгера
@@ -1077,6 +1030,7 @@ def main():
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("list", list_tokens))
+        application.add_handler(CommandHandler("stats", stats_command))
         application.add_handler(CommandHandler("excel", excel_command))
         application.add_handler(CommandHandler("clear", clear_tokens))
         debug_logger.info("Обработчики команд зарегистрированы")
